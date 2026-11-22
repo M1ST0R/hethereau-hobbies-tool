@@ -1933,6 +1933,8 @@ ApplicationWindow {
         }
     }
 
+    }
+
     // Native edge resizing, with custom title-bar controls.
     MouseArea {
         z: 1000
