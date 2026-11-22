@@ -370,6 +370,7 @@ class OwnerSelectionApp:
         self._symbol_svg: dict[str, str] = {}
         self._logo_pil: Image.Image | None = None
         self._window_icon_photo = None
+        self._window_icon_photos: list[ImageTk.PhotoImage] = []
         self.logs_window = None
         self.about_window = None
         self.log_text = None
@@ -404,8 +405,17 @@ class OwnerSelectionApp:
         if os.path.isfile(icon_path):
             try:
                 self._logo_pil = Image.open(icon_path).convert("RGBA")
-                self._window_icon_photo = ImageTk.PhotoImage(self._logo_pil)
-                self.root.iconphoto(True, self._window_icon_photo)
+                # Supply multiple sizes so Windows uses a sharp icon in the
+                # title bar, taskbar, Alt+Tab and high-DPI shell surfaces.
+                self._window_icon_photos = [
+                    ImageTk.PhotoImage(self._logo_pil.resize((size, size), Image.Resampling.LANCZOS))
+                    for size in (16, 24, 32, 48, 64, 128, 256)
+                ]
+                self._window_icon_photo = self._window_icon_photos[-1]
+                self.root.iconphoto(True, *self._window_icon_photos)
+                ico_path = resource_path("assets/app_icon.ico")
+                if os.name == "nt" and os.path.isfile(ico_path):
+                    self.root.iconbitmap(ico_path)
             except Exception as exc:
                 self._logo_pil = None
                 self.log_history.append((
@@ -847,7 +857,7 @@ class OwnerSelectionApp:
                     self.log_text = None
                     return
                 self.log_text.configure(state="normal")
-                self.log_text.insert("end", f"{stamp}  ·  {self.tr(message)}\\n")
+                self.log_text.insert("end", f"{stamp}  ·  {self.tr(message)}\n")
                 self.log_text.see("end")
                 self.log_text.configure(state="disabled")
             except Exception:
@@ -902,7 +912,7 @@ class OwnerSelectionApp:
         self.log_text.pack(fill="both", expand=True, padx=16, pady=(0, 16))
         self.log_text.configure(state="normal")
         for stamp, entry in self.log_history:
-            self.log_text.insert("end", f"{stamp}  ·  {self.tr(entry)}\\n")
+            self.log_text.insert("end", f"{stamp}  ·  {self.tr(entry)}\n")
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
         window.transient(self.root)
@@ -925,7 +935,7 @@ class OwnerSelectionApp:
             self.log_text.configure(state="disabled")
 
     def copy_logs(self):
-        content = "\\n".join(f"{stamp}  ·  {self.tr(entry)}" for stamp, entry in self.log_history)
+        content = "\n".join(f"{stamp}  ·  {self.tr(entry)}" for stamp, entry in self.log_history)
         self.root.clipboard_clear()
         self.root.clipboard_append(content)
         self.log("Журнал скопирован в буфер обмена.")
@@ -962,7 +972,7 @@ class OwnerSelectionApp:
             font=ctk.CTkFont("Segoe UI", 11),
         ).pack(pady=(0, 16))
 
-        about_text = "\\n".join([
+        about_text = "\n".join([
             self.tr("Утилита для автоматизации игровых хобби в Neverness to Everness."),
             self.tr("Сейчас доступен модуль «Подборка владельца»."),
             self.tr("Новые занятия, включая рыбалку, будут добавляться отдельными модулями."),
@@ -1594,7 +1604,13 @@ class OwnerSelectionApp:
         current_candidates = read_digits(
             yellow_mask, scales=(3, 4), psms=(6, 7, 8)
         )
-        valid_current = [value for value, _ in current_candidates if 0 <= value <= target]
+        # Income can overshoot the threshold (e.g. 2303/1900). Reject only
+        # implausibly large OCR noise, not legitimate values above target.
+        upper_plausible = max(target * 3, target + 1000)
+        valid_current = [
+            value for value, _ in current_candidates
+            if 0 <= value <= upper_plausible
+        ]
         if not valid_current:
             return None, target, "целевой лимит найден, текущее значение дохода не распознано"
 
@@ -1846,6 +1862,14 @@ class OwnerSelectionApp:
 
 
 def main():
+    # Stable Windows taskbar grouping and app identity (before Tk creates HWNDs).
+    if os.name == "nt":
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "M1ST0R.HethereauHobbiesTool"
+            )
+        except Exception:
+            pass
     if not ensure_windows_admin():
         return
     ctk.set_appearance_mode("dark")
