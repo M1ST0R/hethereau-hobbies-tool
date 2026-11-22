@@ -670,6 +670,7 @@ ApplicationWindow {
                                         color: "#D9E3FF"
                                         font.pixelSize: 10
                                         wrapMode: Text.WordWrap
+                                        lineHeightMode: Text.ProportionalHeight
                                         lineHeight: 1.2
                                         Layout.fillWidth: true
                                     }
@@ -1400,6 +1401,7 @@ ApplicationWindow {
                                     color: textColor
                                     font.pixelSize: 12
                                     wrapMode: Text.WordWrap
+                                    lineHeightMode: Text.ProportionalHeight
                                     lineHeight: 1.3
                                     Layout.fillWidth: true
                                 }
