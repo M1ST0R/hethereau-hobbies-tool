@@ -7,7 +7,7 @@ import os
 import sys
 
 from PySide6.QtCore import QUrl
-from PySide6.QtGui import QGuiApplication, QIcon
+from PySide6.QtGui import QGuiApplication, QIcon, QFont, QFontDatabase
 from PySide6.QtQml import QQmlApplicationEngine
 
 from hethereau_hobbies_tool import APP_TITLE, ensure_windows_admin, resource_path
@@ -30,6 +30,18 @@ def main() -> int:
     app.setApplicationName(APP_TITLE)
     app.setOrganizationName("M1ST0R")
     app.setOrganizationDomain("github.com/M1ST0R")
+
+    # Prefer a clean native UI font without bundling font files. Qt will fall
+    # back to its platform default if the preferred family is unavailable.
+    installed_fonts = {family.casefold(): family for family in QFontDatabase.families()}
+    preferred_fonts = ("Segoe UI", "Inter", "Noto Sans", "Liberation Sans", "DejaVu Sans")
+    ui_font_family = next(
+        (installed_fonts[name.casefold()] for name in preferred_fonts if name.casefold() in installed_fonts),
+        QFont().defaultFamily(),
+    )
+    ui_font = QFont(ui_font_family)
+    ui_font.setStyleStrategy(QFont.PreferAntialias)
+    app.setFont(ui_font)
     icon_path = resource_path("assets/app_icon.png")
     if os.path.isfile(icon_path):
         app.setWindowIcon(QIcon(icon_path))
