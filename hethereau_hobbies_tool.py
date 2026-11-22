@@ -184,8 +184,8 @@ EN_TRANSLATIONS = {
     "Завершаю текущую операцию": "Finishing the current operation",
     "Подготовка первого цикла": "Preparing the first cycle",
     "Продолжаю текущий цикл": "Resuming the current cycle",
-    "Автоматизация приостановлена. Нажми F6 для продолжения.": "Automation paused. Press F6 to resume.",
-    "Ожидаю F6 для продолжения": "Waiting for F6 to resume",
+    "Автоматизация приостановлена. Используй выбранную клавишу запуска для продолжения.": "Automation paused. Use the configured start key to resume.",
+    "Ожидаю продолжения автоматизации": "Waiting for automation to resume",
     "Проверяю, хватит ли энергии на следующий полный цикл": "Checking whether enough energy remains for another full cycle",
     "Открываю магазин события": "Opening the event shop",
     "Открываю магазин": "Opening shop",
@@ -425,7 +425,7 @@ class OwnerSelectionApp:
         self._build_ui()
         self.refresh_game_window(silent=True)
         self._start_hotkeys()
-        self.log("HHT готов. F6 — старт / пауза, F7 — остановка.")
+        self.log("HHT готов. Управление доступно в главной панели.")
         self.log("Открой событие «Подборка владельца» перед запуском.")
 
 
@@ -1391,7 +1391,7 @@ class OwnerSelectionApp:
             if self.pause_event.is_set():
                 self.set_status(
                     "ПАУЗА",
-                    "Показатели сверены. Нажми F6 для повторной проверки и продолжения.",
+                    "Показатели сверены. Используй выбранную клавишу запуска для продолжения.",
                 )
         return scan
 
@@ -1810,7 +1810,8 @@ class OwnerSelectionApp:
         source_pixels = rgb.load()
         yellow_pixels = yellow_mask.load()
         relaxed_pixels = relaxed_mask.load()
-        hsv_pixels = rgb.convert("HSV").load()
+        hsv_image = rgb.convert("HSV")
+        hsv_pixels = hsv_image.load()
 
         for y in range(height):
             for x in range(width):
@@ -1864,6 +1865,11 @@ class OwnerSelectionApp:
         diagnostics: list[str] = []
         yellow_pixel_count = sum(yellow_mask.getdata()) // 255
         relaxed_pixel_count = sum(relaxed_mask.getdata()) // 255
+        try:
+            yellow_mask.save(os.path.join(debug_dir, "debug_income_current_mask.png"))
+            relaxed_mask.save(os.path.join(debug_dir, "debug_income_current_relaxed.png"))
+        except Exception:
+            pass
 
         # The target is static during the challenge; confirm it from the right
         # side of the counter once, then reuse it for the paired screenshot.
@@ -2067,6 +2073,12 @@ class OwnerSelectionApp:
             if attempt < attempts and not self.stop_event.is_set():
                 time.sleep(0.35)
 
+        # Preserve both diagnostic crops when a paired scan fails, so the
+        # user can distinguish a wrong region from a preprocessing issue.
+        for counter_name in ("energy", "income"):
+            debug_path = self.last_ocr_debug_paths.get(counter_name)
+            if debug_path:
+                self.log(f"Снимок области {counter_name}: {debug_path}")
         return None
 
     def scan_state_manual(self):
@@ -2207,7 +2219,7 @@ class OwnerSelectionApp:
             energy_ocr_failures = 0
             while not self.stop_event.is_set():
                 if self.pause_event.is_set():
-                    self.set_status("ПАУЗА", "Ожидаю F6 для продолжения")
+                    self.set_status("ПАУЗА", "Ожидаю продолжения автоматизации")
                     while self.pause_event.is_set() and not self.stop_event.is_set():
                         if self.pause_scan_requested.is_set():
                             self._perform_pause_scan(
