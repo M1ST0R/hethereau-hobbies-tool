@@ -17,7 +17,7 @@ import customtkinter as ctk
 import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab, ImageTk
-import cairosvg
+import resvg_py
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -456,14 +456,14 @@ class OwnerSelectionApp:
         light_color, dark_color = SYMBOL_COLORS.get(tone, SYMBOL_COLORS["normal"])
 
         def render_icon(color: str) -> Image.Image:
-            # CairoSVG honours the original Material Symbols viewBox, including
+            # resvg honours the original Material Symbols viewBox, including
             # its non-zero origin (0 -960 960 960). svglib cropped parts of
             # several glyphs because it treated negative coordinates as offsets.
             # Rasterize at 4x and let CTkImage downsample for crisp HiDPI display.
-            png_data = cairosvg.svg2png(
-                bytestring=svg_source.encode("utf-8"),
-                output_width=max(96, size * 4),
-                output_height=max(96, size * 4),
+            png_data = resvg_py.svg_to_bytes(
+                svg_string=svg_source,
+                width=max(96, size * 4),
+                height=max(96, size * 4),
             )
             rendered = Image.open(io.BytesIO(png_data)).convert("RGBA")
             alpha = rendered.getchannel("A")
