@@ -112,7 +112,7 @@ class HHTBackend(QObject):
         self.hotkeyRequested.connect(self._handle_hotkey)
         self._start_hotkeys()
 
-        self.log("HHT готов. F6 — старт / пауза, F7 — остановка.")
+        self.log("HHT готов. Управление доступно в главной панели.")
         self.log("Открой событие «Подборка владельца» перед запуском.")
 
     @Property(str, notify=statusChanged)
