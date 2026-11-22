@@ -57,8 +57,10 @@
 - **Owner's Selection module** — opens the event shop, taps the hammer, tracks income, claims the challenge reward, checks energy, and repeats while possible.
 - **Adaptive income target** — reads the target shown by the current level; no hard-coded 1100 / 1900 level table.
 - **OCR validation** — separates the changing yellow income from the static white target and confirms readings before acting.
+- **State resynchronization** — checks energy twice before each cycle, verifies energy and income after opening the shop, and rescans after resuming from a pause before sending more clicks.
 - **Live dashboard** — cycle count, energy, income, game connection, status, and hotkey hints.
-- **Separate utility windows** — open the full activity log or the About dialog when needed.
+- **Integrated workspace** — a persistent sidebar switches between Owner, About, and Logs inside one application window; there are no separate utility pop-ups.
+- **Selectable logs** — copy a highlighted excerpt with `Ctrl+C`, use the right-click menu, or copy the full log.
 - **Personalized interface** — language dropdown, Light / Dark switch, and saved preferences.
 - **Material Symbols Outlined** — official SVG glyphs bundled locally and tinted for the active theme. No remote font requests.
 - **Windows elevation** — the Windows build requests Administrator privileges through UAC so HHT can send input to an elevated game process.
@@ -126,8 +128,9 @@ chmod +x start.sh
 | Emergency stop | Move the cursor to the top-left screen corner |
 | Change language | Language dropdown in the header |
 | Change appearance | Light / Dark switch in the header |
-| View activity history | **View logs** |
-| App information | **About** |
+| Workspace navigation | **Owner / About / Logs** tabs in the left sidebar |
+| Copy selected log text | Select text, then `Ctrl+C` or right-click → Copy selection |
+| Copy full activity history | **Copy all** on the Logs tab |
 
 ## How level detection works
 
@@ -144,7 +147,7 @@ The first run on a new resolution or level should be supervised.
 
 ## Diagnostics
 
-Use **Test OCR** in the app. HHT saves the captured counter regions beside the application:
+Use **Scan income and energy** on the Owner tab. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
 
 - `debug_income_capture.png` — income counter;
 - `debug_energy_capture.png` — energy counter.
