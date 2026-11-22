@@ -409,7 +409,11 @@ class OwnerSelectionApp:
         self.last_ocr_debug_path = ""
         self.current_page = "owner"
         self.rescan_requested = threading.Event()
+        self.pause_scan_requested = threading.Event()
+        self.last_pause_scan: dict | None = None
         self.last_resume_scan: dict | None = None
+        self._stop_scan_lock = threading.Lock()
+        self._stop_scan_pending = False
         self.worker_error: tuple[str, str] | None = None
         self.last_scan_error = ""
 
@@ -1209,39 +1213,171 @@ class OwnerSelectionApp:
 
     # ------------------------------- CONTROL -------------------------------
     def toggle_run_pause(self):
+        if self._stop_scan_pending:
+            self.log("Дождись завершения контрольного сканирования после остановки.")
+            return
+
         if self.worker_thread and self.worker_thread.is_alive():
             if self.pause_event.is_set():
+                # Resume is never allowed to continue from stale pre-pause values.
+                self.pause_scan_requested.clear()
                 self.rescan_requested.set()
+                self.last_pause_scan = None
                 self.last_resume_scan = None
                 self.pause_event.clear()
-                self.set_status("ПРОВЕРКА ПОСЛЕ ПАУЗЫ", "Сначала заново проверю энергию и доход")
-                self.log("Пауза снята. Перед следующими кликами проверю энергию и доход.")
+                self.set_status(
+                    "ПРОВЕРКА ПОСЛЕ ПАУЗЫ",
+                    "Сначала заново проверю доход и энергию. До подтверждения кликов не будет.",
+                )
+                self.log("Пауза снята. Запрошен контрольный скан дохода и энергии.")
             else:
                 self.pause_event.set()
-                self.set_status("ПАУЗА", "Автоматизация приостановлена. Нажми F6 для продолжения.")
-                self.log("Пауза включена.")
+                self.pause_scan_requested.set()
+                self.set_status(
+                    "ПАУЗА",
+                    "Ввод остановлен. Сверяю доход и энергию на текущем экране.",
+                )
+                self.log("Пауза включена. Запрошен скан текущего состояния.")
             return
 
         self.stop_event.clear()
         self.pause_event.clear()
         self.rescan_requested.clear()
+        self.pause_scan_requested.clear()
+        self.last_pause_scan = None
         self.last_resume_scan = None
         self.worker_error = None
         self.cycle_count = 0
         self.set_metric("cycles", "0")
+        self.set_status(
+            "ЗАПУСК",
+            "Сначала проверю энергию, затем открою магазин и сверю оба счётчика.",
+        )
+        self.log("Автоматизация запущена. Перед первым действием будет проверена энергия.")
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
         self.worker_thread.start()
-        self.set_status("ЗАПУСК", "Подготовка первого цикла")
-        self.log("Автоматизация запущена.")
 
     def stop(self):
+        worker = self.worker_thread
+        was_running = worker is not None and worker.is_alive()
+        previous_status = self.current_status
+        previous_stage = self.current_stage
+        include_income = (
+            "ФАРМ" in previous_status
+            or any(token in previous_stage.lower() for token in ("доход", "фарм", "накоплен"))
+        )
+
         self.stop_event.set()
         self.pause_event.clear()
-        if not (self.worker_thread and self.worker_thread.is_alive()):
+        self.pause_scan_requested.clear()
+
+        if not was_running:
             self.set_status("ОСТАНОВЛЕНО", "Автоматизация не запущена")
+            self.log("Получена команда остановки: активных действий не было.")
+            return
+
+        self.set_status("ОСТАНОВКА", "Прекращаю ввод и после этого сверю счётчики.")
+        self.log("Получена команда остановки. Новые клики запрещены.")
+        self._schedule_stop_scan(worker, include_income=include_income)
+
+    def _schedule_stop_scan(self, worker: threading.Thread, *, include_income: bool):
+        """Refresh available counters after the worker has stopped sending input."""
+        with self._stop_scan_lock:
+            if self._stop_scan_pending:
+                return
+            self._stop_scan_pending = True
+
+        def scan_after_worker():
+            try:
+                worker.join()
+                if self.closed:
+                    return
+                result = self._scan_game_state(
+                    include_income=include_income,
+                    reason="после остановки",
+                    attempts=2,
+                    allow_when_stopped=True,
+                )
+                if result is None:
+                    self.log(
+                        "После остановки контрольный скан не подтверждён: "
+                        f"{self.last_scan_error or 'счётчики не прочитаны'}. "
+                        "Игровые действия не выполнялись."
+                    )
+                else:
+                    summary = (
+                        f"После остановки подтверждены энергия "
+                        f"{result['energy']}/{result['energy_max']}"
+                    )
+                    if include_income:
+                        summary += f", доход {result['income']}/{result['income_max']}"
+                    self.log(summary + ".")
+                    self.set_status(
+                        "ОСТАНОВЛЕНО",
+                        "Ввод остановлен. Последние доступные показатели обновлены.",
+                    )
+            except Exception as exc:
+                if not self.closed:
+                    self.log(
+                        f"Сканирование после остановки завершилось ошибкой: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+            finally:
+                with self._stop_scan_lock:
+                    self._stop_scan_pending = False
+
+        threading.Thread(
+            target=scan_after_worker,
+            daemon=True,
+            name="HHT-Stop-State-Scan",
+        ).start()
+
+    def _perform_pause_scan(self, *, include_income: bool, reason: str):
+        """Scan the visible counters while keeping game input paused."""
+        if not self.pause_scan_requested.is_set() or self.stop_event.is_set():
+            return None
+
+        self.pause_scan_requested.clear()
+        self.set_status(
+            "ПАУЗА",
+            "Проверяю показатели на текущем экране. Автоматизация остаётся на паузе.",
+        )
+        try:
+            scan = self._scan_game_state(
+                include_income=include_income,
+                reason=reason,
+                attempts=2,
+            )
+        except Exception as exc:
+            self.last_scan_error = f"{type(exc).__name__}: {exc}"
+            scan = None
+
+        self.last_pause_scan = scan
+        if scan is None:
+            self.log(
+                f"Скан при паузе не подтверждён ({reason}): "
+                f"{self.last_scan_error or 'счётчики не прочитаны'}. "
+                "При возобновлении будет выполнен новый полный скан."
+            )
+            if self.pause_event.is_set():
+                self.set_status(
+                    "ПАУЗА",
+                    "Скан не подтверждён. Возобновление потребует повторной проверки.",
+                )
         else:
-            self.set_status("ОСТАНОВКА", "Завершаю текущую операцию")
-        self.log("Получена команда остановки.")
+            summary = (
+                f"При паузе подтверждены энергия "
+                f"{scan['energy']}/{scan['energy_max']}"
+            )
+            if include_income:
+                summary += f", доход {scan['income']}/{scan['income_max']}"
+            self.log(summary + ".")
+            if self.pause_event.is_set():
+                self.set_status(
+                    "ПАУЗА",
+                    "Показатели сверены. Нажми F6 для повторной проверки и продолжения.",
+                )
+        return scan
 
     def close(self):
         self.closed = True
@@ -1752,6 +1888,7 @@ class OwnerSelectionApp:
         include_income: bool = True,
         reason: str = "проверка состояния",
         attempts: int = 3,
+        allow_when_stopped: bool = False,
     ) -> dict | None:
         """Focus the game and verify counters from independent screenshots.
 
@@ -1759,11 +1896,13 @@ class OwnerSelectionApp:
         matching target and a non-decreasing current value in two reads.
         Nothing should click through an ambiguous state.
         """
+        if self.stop_event.is_set() and not allow_when_stopped:
+            return None
         self._bring_game_to_front()
         time.sleep(0.2)
 
         for attempt in range(1, attempts + 1):
-            if self.stop_event.is_set():
+            if self.stop_event.is_set() and not allow_when_stopped:
                 return None
 
             energy_a, energy_max_a, energy_raw_a = self.read_energy()
@@ -1841,13 +1980,13 @@ class OwnerSelectionApp:
         if self.worker_thread and self.worker_thread.is_alive():
             self.log("Ручной скан пропущен: автоматизация сама проверяет счётчики при старте, паузе и смене цикла.")
             return
-        self.stop_event.clear()
-
         def run_scan():
             try:
                 self.set_status("СКАНИРОВАНИЕ", "Проверяю энергию и доход по двум независимым снимкам")
                 result = self._scan_game_state(
-                    include_income=True, reason="ручная проверка"
+                    include_income=True,
+                    reason="ручная проверка",
+                    allow_when_stopped=True,
                 )
                 if result is None:
                     self.set_status(
@@ -1883,6 +2022,11 @@ class OwnerSelectionApp:
                 return False
             if self.pause_event.is_set():
                 paused_during_wait = True
+                if self.pause_scan_requested.is_set():
+                    self._perform_pause_scan(
+                        include_income=(resume_scan == "both"),
+                        reason="при паузе во время ожидания",
+                    )
                 time.sleep(0.1)
                 continue
 
@@ -1938,6 +2082,7 @@ class OwnerSelectionApp:
                 include_income=False,
                 reason=f"перед кликом «{name}» после паузы",
             )
+            self.pause_scan_requested.clear()
             if scan is None:
                 self.worker_error = (
                     "ОШИБКА СИНХРОНИЗАЦИИ",
@@ -1971,6 +2116,11 @@ class OwnerSelectionApp:
                 if self.pause_event.is_set():
                     self.set_status("ПАУЗА", "Ожидаю F6 для продолжения")
                     while self.pause_event.is_set() and not self.stop_event.is_set():
+                        if self.pause_scan_requested.is_set():
+                            self._perform_pause_scan(
+                                include_income=False,
+                                reason="при паузе перед новым циклом",
+                            )
                         time.sleep(0.1)
                     continue
 
@@ -2030,6 +2180,7 @@ class OwnerSelectionApp:
                         include_income=True, reason="после открытия магазина"
                     )
                 self.rescan_requested.clear()
+                self.pause_scan_requested.clear()
                 if opening_scan is None:
                     self.worker_error = (
                         "ОШИБКА СИНХРОНИЗАЦИИ",
@@ -2072,7 +2223,15 @@ class OwnerSelectionApp:
 
                 while not self.stop_event.is_set():
                     while self.pause_event.is_set() and not self.stop_event.is_set():
-                        self.set_status("ПАУЗА", "Фарм приостановлен. F6 продолжит текущий цикл.")
+                        self.set_status("ПАУЗА", "Фарм приостановлен. Сверяю текущие показатели.")
+                        if self.pause_scan_requested.is_set():
+                            if income_thread is not None and income_thread.is_alive():
+                                while income_thread.is_alive() and not self.stop_event.is_set():
+                                    income_thread.join(timeout=0.1)
+                            self._perform_pause_scan(
+                                include_income=True,
+                                reason="при паузе во время фарма",
+                            )
                         time.sleep(0.1)
                     if self.stop_event.is_set():
                         break
@@ -2088,6 +2247,7 @@ class OwnerSelectionApp:
                         income_thread = None
                         income_result = None
                         self.rescan_requested.clear()
+                        self.pause_scan_requested.clear()
                         self.last_resume_scan = None
                         self.set_status(
                             "ПОВТОРНЫЙ СКАН",
