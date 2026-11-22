@@ -1,5 +1,44 @@
 """Pure OCR value-selection helpers; intentionally independent of the GUI."""
 
+import re
+
+
+def parse_ratio_text(
+    raw: str,
+    *,
+    expected_max: int | None = None,
+    min_max: int = 1,
+) -> list[tuple[int, int, str]]:
+    """Parse full ratios, or a lone numerator when its denominator is trusted.
+
+    A numerator-only reading is allowed only after an independent scan has
+    established the static maximum for the current event. Multiple numbers
+    without a slash remain ambiguous and are never promoted to a ratio.
+    """
+    compact = re.sub(r"[^0-9/]", "", raw)
+    parsed: list[tuple[int, int, str]] = []
+
+    for match in re.finditer(r"(\d{1,6})/(\d{1,6})", compact):
+        current, maximum = int(match.group(1)), int(match.group(2))
+        if maximum < min_max or maximum <= 0 or current > maximum:
+            continue
+        if expected_max is not None and maximum != expected_max:
+            continue
+        parsed.append((current, maximum, raw))
+
+    if parsed or expected_max is None:
+        return parsed
+
+    digit_tokens = re.findall(r"\d{1,6}", raw)
+    if len(digit_tokens) != 1:
+        return parsed
+
+    current = int(digit_tokens[0])
+    if 0 <= current <= expected_max:
+        parsed.append((current, expected_max, f"{raw} (ранее подтверждён максимум {expected_max})"))
+    return parsed
+
+
 def select_ratio_candidate(
     parsed: list[tuple[int, int, str]],
 ) -> tuple[int | None, int | None, str]:
