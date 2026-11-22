@@ -1483,6 +1483,7 @@ class OwnerSelectionApp:
                     "-c tessedit_char_whitelist=0123456789/ "
                     "-c load_system_dawg=0 -c load_freq_dawg=0"
                 ),
+                timeout=2.5,
             ).strip()
             if not raw:
                 continue
@@ -1557,6 +1558,7 @@ class OwnerSelectionApp:
                             "-c tessedit_char_whitelist=0123456789 "
                             "-c load_system_dawg=0 -c load_freq_dawg=0"
                         ),
+                        timeout=2.5,
                     ).strip()
                     for token in re.findall(r"\d{1,6}", raw):
                         values.append((int(token), raw))
