@@ -27,8 +27,11 @@
   <a href="#возможности"><strong>Возможности</strong></a>
   ·
   <a href="#быстрый-старт"><strong>Быстрый старт</strong></a>
-  ·
-  <a href="README.md"><strong>English version</strong></a>
+</p>
+
+<p align="center">
+  <a href="README.md"><strong>🇬🇧</strong></a>
+  <a href="README.ru.md"><strong>🇷🇺</strong></a>
 </p>
 
 ---
@@ -38,7 +41,7 @@
 
 ## ✦ Кратко о проекте
 
-| | |
+| Субъект | Описание |
 |---|---|
 | **Текущий модуль** | Подборка владельца |
 | **Процесс игры** | `HTGame.exe` |
