@@ -51,6 +51,10 @@
 | **Automation** | OCR + window-bound input |
 | **Hotkeys** | `F6` Start / Pause · `F7` Stop |
 
+## Interface technology
+
+The desktop interface is being migrated to **PySide6 + Qt Quick (QML)**. The automation and OCR remain in Python and are exposed to QML through Qt signals and slots. The interface uses the Qt for Python Essentials distribution, which includes QtQml, QtQuick and QtQuick Controls.
+
 ## Features
 
 - **Game-aware automation** — attaches to the `HTGame.exe` window and calculates clicks relative to its client area.
