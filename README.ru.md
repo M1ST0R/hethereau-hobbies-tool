@@ -220,6 +220,7 @@ HHT соберёт Windows- и Linux-пакеты, создаст соответ
 ## Благодарности
 
 - Иконки интерфейса: [Google Material Symbols Outlined](https://github.com/google/material-design-icons), лицензия Apache 2.0. См. [LICENSE-MATERIAL-SYMBOLS.txt](LICENSE-MATERIAL-SYMBOLS.txt).
+- **Шрифт интерфейса:** Montserrat Variable включён в приложение локально для одинакового отображения в Windows и Linux. Распространяется по SIL Open Font License 1.1; см. [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
 - Исходный код HHT: MIT. См. [LICENSE](LICENSE).
 
 ---
