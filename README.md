@@ -172,6 +172,37 @@ GitHub Actions builds both platforms on pushes to `main`, pull requests, and man
 - Linux: Debian package and portable TAR.GZ.
 - Push a version tag such as `v0.4.0` to create a GitHub Release automatically.
 
+## Versioning and releases
+
+HHT uses a simple SemVer-based two-channel workflow.
+
+| Channel | Version example | How it is created | Where to get it |
+|---|---|---|---|
+| **DEV** | `0.3.0-dev.142+1a2b3c4` | Every push to `main` (also PR/manual CI runs) | GitHub Actions artifacts |
+| **Release** | `0.3.0` | Run the workflow with a release version, or push a `v0.3.0` tag | GitHub Releases |
+| **Prerelease** | `0.4.0-beta.1` | Run the workflow with a prerelease version, or push a `v0.4.0-beta.1` tag | GitHub Releases, marked as prerelease |
+
+### Create a release from GitHub Actions
+
+1. Open **Actions → Build HHT packages → Run workflow**.
+2. Select the branch to release (normally `main`).
+3. Enter a version in **Release version**, without the leading `v`:
+   - `0.3.0` for a stable release;
+   - `0.4.0-beta.1` for a prerelease.
+4. Click **Run workflow**.
+
+HHT builds Windows and Linux packages, creates the matching Git tag (`v0.3.0`), and publishes a GitHub Release with the generated files. The tag is created only after both platform builds succeed.
+
+Leave **Release version** empty to create a DEV build only. No Git tag or Release is created.
+
+### Version rules
+
+- Use `MAJOR.MINOR.PATCH`, for example `0.3.0`.
+- Increase **PATCH** for fixes, **MINOR** for backwards-compatible features, and **MAJOR** for breaking changes.
+- Use suffixes such as `-alpha.1`, `-beta.1`, or `-rc.1` for prereleases.
+- The app's **About** window shows the exact build version and whether it is DEV or Release.
+- DEV builds have unique run numbers and a short commit SHA, so two Actions builds are easy to distinguish.
+
 ## App icon
 
 The launcher icon is intentionally kept separate from the interface symbols. The application loads `assets/app_icon.png` when present; the build workflow generates a multi-size Windows `.ico` and includes the PNG in the Linux package.
