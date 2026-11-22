@@ -206,16 +206,38 @@ EN_TRANSLATIONS = {
 
 
 # ------------------------------- THEME -----------------------------------
-BG = "#0B1020"
-PANEL = "#131C31"
-PANEL_ALT = "#19243D"
-BORDER = "#263653"
-TEXT = "#F2F5FA"
-MUTED = "#91A0B8"
-ACCENT = "#6C8CFF"
-GREEN = "#24C78A"
-RED = "#F06475"
-YELLOW = "#F5C45E"
+THEME_PALETTES = {
+    "dark": {
+        "BG": "#0B1020", "PANEL": "#131C31", "PANEL_ALT": "#19243D",
+        "BORDER": "#263653", "TEXT": "#F2F5FA", "MUTED": "#91A0B8",
+        "ACCENT": "#6C8CFF", "ACCENT_HOVER": "#5676E8",
+        "GREEN": "#24C78A", "RED": "#F06475", "YELLOW": "#F5C45E",
+        "STOP_BG": "#39202B", "STOP_HOVER": "#542A39", "STOP_TEXT": "#FFADB8",
+        "HOTKEY_START_BG": "#263A68", "HOTKEY_START_TEXT": "#DCE5FF",
+        "HOTKEY_STOP_BG": "#4A2632", "HOTKEY_STOP_TEXT": "#FFDDE2",
+        "LOG_BG": "#080D18", "LOG_TEXT": "#CAD4E5",
+        "STATUS_PAUSE_BG": "#3A321F", "STATUS_ERROR_BG": "#3B202B",
+        "STATUS_RUNNING_BG": "#18382F",
+    },
+    "light": {
+        "BG": "#F1F4FA", "PANEL": "#FFFFFF", "PANEL_ALT": "#E7ECF5",
+        "BORDER": "#D3DCEC", "TEXT": "#1D2942", "MUTED": "#65738C",
+        "ACCENT": "#4F68C8", "ACCENT_HOVER": "#3F57B7",
+        "GREEN": "#16845F", "RED": "#C8475D", "YELLOW": "#A87619",
+        "STOP_BG": "#FBE8EC", "STOP_HOVER": "#F5D6DD", "STOP_TEXT": "#B43A52",
+        "HOTKEY_START_BG": "#E2E9FC", "HOTKEY_START_TEXT": "#354FAD",
+        "HOTKEY_STOP_BG": "#FBE5E9", "HOTKEY_STOP_TEXT": "#B43D55",
+        "LOG_BG": "#F8FAFD", "LOG_TEXT": "#2B3852",
+        "STATUS_PAUSE_BG": "#FFF2D7", "STATUS_ERROR_BG": "#FBE6E9",
+        "STATUS_RUNNING_BG": "#E2F4EC",
+    },
+}
+
+
+def apply_theme_palette(mode: str):
+    """Set the shared widget palette from CustomTkinter's active appearance mode."""
+    palette = THEME_PALETTES["light" if str(mode).lower() == "light" else "dark"]
+    globals().update(palette)
 
 
 def resource_path(relative_path: str) -> str:
@@ -296,6 +318,8 @@ class OwnerSelectionApp:
     def __init__(self, root: ctk.CTk):
         self.root = root
         self.language = self._load_language()
+        self.theme_mode = ctk.get_appearance_mode().lower()
+        apply_theme_palette(self.theme_mode)
         self.ui_metrics = {"cycles": "0", "energy": "—", "income": "—"}
         self.current_status = "ГОТОВ К РАБОТЕ"
         self.current_stage = "Ожидание запуска"
@@ -329,6 +353,7 @@ class OwnerSelectionApp:
         self._build_ui()
         self.refresh_game_window(silent=True)
         self._start_hotkeys()
+        self.root.after(1200, self._sync_system_theme)
         self.log("Программа готова. F6 — старт / пауза, F7 — остановка.")
         self.log("Открой событие «Увлечения Этеро — Подборка владельца» перед запуском.")
 
@@ -447,17 +472,35 @@ class OwnerSelectionApp:
                 return target + text[len(source):]
         return translated
 
-    def toggle_language(self):
-        self.language = "ru" if self.language == "en" else "en"
-        self._save_language()
+    def _rebuild_ui(self):
         for child in self.root.winfo_children():
             child.destroy()
         self.metric_labels = {}
+        self.root.configure(fg_color=BG)
         self._build_ui()
         self.root.title(self.tr(APP_TITLE))
         self.set_status(self.current_status, self.current_stage)
         for metric, value in self.ui_metrics.items():
             self.set_metric(metric, value)
+
+    def _sync_system_theme(self):
+        if self.closed:
+            return
+        active_mode = ctk.get_appearance_mode().lower()
+        if active_mode in ("light", "dark") and active_mode != self.theme_mode:
+            self.theme_mode = active_mode
+            apply_theme_palette(active_mode)
+            self._rebuild_ui()
+            self.log(
+                "Светлая тема включена." if active_mode == "light" else "Тёмная тема включена."
+            )
+        if not self.closed:
+            self.root.after(1200, self._sync_system_theme)
+
+    def toggle_language(self):
+        self.language = "ru" if self.language == "en" else "en"
+        self._save_language()
+        self._rebuild_ui()
         self.log("Язык интерфейса изменён." if self.language == "ru" else "Interface language changed.")
 
     # -------------------------------- UI ----------------------------------
@@ -600,7 +643,7 @@ class OwnerSelectionApp:
         self.toggle_button = ctk.CTkButton(
             controls, text=self.tr("Запустить / Пауза · F6"),
             image=self.symbol_image("play_arrow", 22, "normal"), compound="left", height=47,
-            fg_color=ACCENT, hover_color="#5676E8", text_color="#FFFFFF",
+            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color="#FFFFFF",
             font=ctk.CTkFont("Segoe UI", 13, "bold"), corner_radius=12,
             command=self.toggle_run_pause,
         )
@@ -608,7 +651,7 @@ class OwnerSelectionApp:
         self.stop_button = ctk.CTkButton(
             controls, text=self.tr("Стоп · F7"),
             image=self.symbol_image("stop", 19, "danger"), compound="left", height=47, width=145,
-            fg_color="#39202B", hover_color="#542A39", text_color="#FFADB8",
+            fg_color=STOP_BG, hover_color=STOP_HOVER, text_color=STOP_TEXT,
             font=ctk.CTkFont("Segoe UI", 13, "bold"), corner_radius=12,
             command=self.stop,
         )
@@ -634,7 +677,7 @@ class OwnerSelectionApp:
         ).pack(side="left", padx=(0, 10))
         ctk.CTkLabel(
             hotkey_row, text="F6", width=42, height=27, corner_radius=7,
-            fg_color="#263A68", text_color="#DCE5FF",
+            fg_color=HOTKEY_START_BG, text_color=HOTKEY_START_TEXT,
             font=ctk.CTkFont("Segoe UI", 11, "bold"),
         ).pack(side="left")
         ctk.CTkLabel(
@@ -643,7 +686,7 @@ class OwnerSelectionApp:
         ).pack(side="left", padx=(8, 20))
         ctk.CTkLabel(
             hotkey_row, text="F7", width=42, height=27, corner_radius=7,
-            fg_color="#4A2632", text_color="#FFDDE2",
+            fg_color=HOTKEY_STOP_BG, text_color=HOTKEY_STOP_TEXT,
             font=ctk.CTkFont("Segoe UI", 11, "bold"),
         ).pack(side="left")
         ctk.CTkLabel(
@@ -667,8 +710,8 @@ class OwnerSelectionApp:
         ).pack(side="right")
         self.log_text = ctk.CTkTextbox(
             outer, height=205, corner_radius=12,
-            fg_color="#080D18", border_width=1, border_color=BORDER,
-            text_color="#CAD4E5", font=ctk.CTkFont("Consolas", 10),
+            fg_color=LOG_BG, border_width=1, border_color=BORDER,
+            text_color=LOG_TEXT, font=ctk.CTkFont("Consolas", 10),
             wrap="word",
         )
         self.log_text.pack(fill="both", expand=True)
@@ -706,16 +749,16 @@ class OwnerSelectionApp:
                 return
             if "ПАУЗА" in status:
                 color = YELLOW
-                fg = "#3A321F"
+                fg = STATUS_PAUSE_BG
             elif any(word in status for word in ("ОШИБКА", "ОСТАНОВЛЕНО", "ОСТАНОВКА", "АВАРИЙНАЯ")):
                 color = RED
-                fg = "#3B202B"
+                fg = STATUS_ERROR_BG
             elif any(word in status for word in ("РАБОТАЕТ", "ЗАПУСК", "ФАРМ", "ПОЛУЧАЮ", "ОТКРЫВАЮ", "ПРОВЕРКА", "ЗАВЕРШАЮ")):
                 color = GREEN
-                fg = "#18382F"
+                fg = STATUS_RUNNING_BG
             elif "ЗАКОНЧИЛАСЬ" in status or "ЗАВЕРШЕНО" in status:
                 color = YELLOW
-                fg = "#3A321F"
+                fg = STATUS_PAUSE_BG
             else:
                 color = TEXT
                 fg = PANEL_ALT
@@ -1494,8 +1537,9 @@ class OwnerSelectionApp:
 def main():
     if not ensure_windows_admin():
         return
-    ctk.set_appearance_mode("dark")
+    ctk.set_appearance_mode("System")
     ctk.set_default_color_theme("blue")
+    apply_theme_palette(ctk.get_appearance_mode())
     root = ctk.CTk()
     OwnerSelectionApp(root)
     root.mainloop()
