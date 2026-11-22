@@ -200,7 +200,7 @@ Apache License
    See the License for the specific language governing permissions and
    limitations under the License.
 
-Material Symbols Rounded icon assets in assets/icons/material_symbols_rounded.png are adapted from Google's Material Symbols project:
+Material Symbols Outlined SVG glyphs in assets/icons/material_symbols_outlined.json are adapted from Google's Material Symbols project:
 https://github.com/google/material-design-icons
 
-The HOST launcher icon in assets/host.png and assets/host.ico is an original project asset.
+The HHT application launcher icon/mascot is intentionally not included yet. A final original brand asset will be added after the user chooses the mascot or abstract-symbol direction.
