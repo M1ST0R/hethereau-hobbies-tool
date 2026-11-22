@@ -2,10 +2,26 @@
 
 import unittest
 
-from hht_ocr import select_ratio_candidate
+from hht_ocr import parse_ratio_text, select_ratio_candidate
 
 
 class SelectRatioCandidateTests(unittest.TestCase):
+    def test_full_ratio_is_parsed_normally(self):
+        self.assertEqual(parse_ratio_text("268/700"), [(268, 700, "268/700")])
+
+    def test_numerator_only_uses_previously_confirmed_maximum(self):
+        result = parse_ratio_text("310", expected_max=700)
+        self.assertEqual(result[0][0:2], (310, 700))
+        self.assertIn("700", result[0][2])
+
+    def test_numerator_only_is_not_accepted_without_confirmed_maximum(self):
+        self.assertEqual(parse_ratio_text("310"), [])
+
+    def test_multiple_unseparated_numbers_are_not_accepted_as_numerator(self):
+        self.assertEqual(parse_ratio_text("310 700", expected_max=700), [])
+
+    def test_numerator_above_confirmed_maximum_is_rejected(self):
+        self.assertEqual(parse_ratio_text("710", expected_max=700), [])
     def test_single_complete_ratio_is_provisional_not_rejected(self):
         result = select_ratio_candidate([(292, 700, "292/700")])
 
