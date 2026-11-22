@@ -398,6 +398,7 @@ class OwnerSelectionApp:
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
         self.worker_thread: threading.Thread | None = None
+        self.active_income_ocr_thread: threading.Thread | None = None
         self.hotkey_listener = None
         self.hotkey_lock = threading.Lock()
         self.last_hotkey_time: dict[str, float] = {}
@@ -1051,7 +1052,10 @@ class OwnerSelectionApp:
 
                 text_widget = getattr(self.log_text, "_textbox", self.log_text)
                 try:
-                    was_at_bottom = float(text_widget.yview()[1]) >= 0.985
+                    has_selection = bool(text_widget.tag_ranges("sel"))
+                    was_at_bottom = (
+                        not has_selection and float(text_widget.yview()[1]) >= 0.985
+                    )
                 except Exception:
                     was_at_bottom = True
 
@@ -1243,6 +1247,7 @@ class OwnerSelectionApp:
 
         self.stop_event.clear()
         self.pause_event.clear()
+        self.active_income_ocr_thread = None
         self.rescan_requested.clear()
         self.pause_scan_requested.clear()
         self.last_pause_scan = None
@@ -1292,6 +1297,9 @@ class OwnerSelectionApp:
         def scan_after_worker():
             try:
                 worker.join()
+                pending_ocr = self.active_income_ocr_thread
+                if pending_ocr is not None and pending_ocr.is_alive():
+                    pending_ocr.join()
                 if self.closed:
                     return
                 result = self._scan_game_state(
@@ -2231,6 +2239,8 @@ class OwnerSelectionApp:
                             if income_thread is not None and income_thread.is_alive():
                                 while income_thread.is_alive() and not self.stop_event.is_set():
                                     income_thread.join(timeout=0.1)
+                            if not income_thread.is_alive():
+                                self.active_income_ocr_thread = None
                             self._perform_pause_scan(
                                 include_income=True,
                                 reason="при паузе во время фарма",
@@ -2245,6 +2255,8 @@ class OwnerSelectionApp:
                         if income_thread is not None and income_thread.is_alive():
                             while income_thread.is_alive() and not self.stop_event.is_set():
                                 income_thread.join(timeout=0.1)
+                        if income_thread is not None and not income_thread.is_alive():
+                            self.active_income_ocr_thread = None
                         if self.stop_event.is_set():
                             break
                         income_thread = None
@@ -2305,6 +2317,7 @@ class OwnerSelectionApp:
                             name="HHT-Income-OCR",
                         )
                         income_thread.start()
+                        self.active_income_ocr_thread = income_thread
                         last_ocr = now
 
                     if (
@@ -2323,6 +2336,7 @@ class OwnerSelectionApp:
                             current, maximum, raw = income_result["result"]
 
                         income_thread = None
+                        self.active_income_ocr_thread = None
                         income_result = None
                         now = time.monotonic()
 
