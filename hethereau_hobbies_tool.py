@@ -456,8 +456,15 @@ class OwnerSelectionApp:
             drawing = svg2rlg(io.BytesIO(colored_svg.encode("utf-8")))
             if drawing is None:
                 raise ValueError(f"Could not parse Material Symbol: {name}")
+            # Render an RGBA surface with a transparent canvas. The previous
+            # default RGB canvas baked a solid background behind each glyph.
             png_data = renderPM.drawToString(
-                drawing, fmt="PNG", dpi=72 * size / 24, backend="rlPyCairo"
+                drawing,
+                fmt="PNG",
+                dpi=72 * size / 24,
+                backend="rlPyCairo",
+                backendFmt="RGBA",
+                bg=None,
             )
             return Image.open(io.BytesIO(png_data)).convert("RGBA")
 
