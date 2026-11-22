@@ -1,4 +1,4 @@
-# Увлечения Этеро — автоматизация «Подборки владельца»
+# Hethereau Owner's Selection Tool
 
 [English](README.md) | [Русский](README.ru.md)
 
