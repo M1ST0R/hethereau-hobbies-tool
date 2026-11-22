@@ -1,9 +1,9 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title Hethereau Owner's Selection Tool (HOST)
+title Hethereau Hobbies Tool (HHT)
 
-rem Request elevation before installing dependencies or launching HOST.
+rem Request elevation before installing dependencies or launching HHT.
 fltmc >nul 2>&1
 if errorlevel 1 (
     echo Requesting administrator privileges...
@@ -18,5 +18,5 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-py etero_owner_selection.py
+py hethereau_hobbies_tool.py
 if errorlevel 1 pause
