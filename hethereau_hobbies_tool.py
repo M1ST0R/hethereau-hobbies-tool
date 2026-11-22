@@ -1441,8 +1441,12 @@ class OwnerSelectionApp:
             return None, None, "пустая область захвата"
 
         try:
+            # Keep OCR diagnostics outside PyInstaller's temporary _MEIPASS
+            # directory so they remain available after a one-file EXE closes.
+            debug_dir = os.path.dirname(self._config_path())
+            os.makedirs(debug_dir, exist_ok=True)
             debug_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
+                debug_dir,
                 f"debug_{debug_name}_capture.png",
             )
             crop.save(debug_path)
