@@ -1,4 +1,4 @@
-# Hethereau — Owner's Selection Automation
+# Hethereau Owner's Selection Tool
 
 [English](README.md) | [Русский](README.ru.md)
 
