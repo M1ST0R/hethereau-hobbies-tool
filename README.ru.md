@@ -69,9 +69,9 @@
 
 | Платформа | Пакет | Примечания |
 |---|---|---|
-| **Windows 10/11 x64** | `Hethereau-HHT-Windows-x64.exe` | Один переносимый EXE; Tesseract OCR включён |
+| **Windows 10/11 x64** | `Hethereau-HHT-Windows-x64-VERSION.exe` | Один переносимый EXE; Tesseract OCR включён |
 | **Debian / Ubuntu x86_64** | `hethereau-hobbies-tool_VERSION_amd64.deb` | Установочный пакет для X11 |
-| **Linux x86_64** | `Hethereau-HHT-Linux-x86_64.tar.gz` | Переносимая сборка; Tesseract устанавливается отдельно |
+| **Linux x86_64** | `Hethereau-HHT-Linux-x86_64-VERSION.tar.gz` | Переносимая сборка; Tesseract устанавливается отдельно |
 
 Пока релиза нет? Готовые CI-сборки доступны в **[Actions → Build HHT packages](https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml)**. Открой успешный запуск и скачай артефакт `HHT-windows-x64` или `HHT-linux-x86_64`.
 
@@ -79,7 +79,7 @@
 
 ### Windows
 
-1. Скачай `Hethereau-HHT-Windows-x64.exe` из [Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
+1. Скачай версионный файл `Hethereau-HHT-Windows-x64-VERSION.exe` из [Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
 2. Запусти HHT и подтверди запрос Windows UAC.
 3. Открой в NTE событие **«Подборка владельца»**.
 4. Дождись, пока HHT найдёт `HTGame.exe`.
