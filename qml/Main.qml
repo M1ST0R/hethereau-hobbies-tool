@@ -296,6 +296,45 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 currentIndex: root.currentPage === "owner" ? 0 : (root.currentPage === "about" ? 1 : 2)
+                onCurrentIndexChanged: pageTransition.restart()
+
+                // Animate only composited properties; page changes do not resize
+                // the layout tree or trigger animated width/height recalculation.
+                SequentialAnimation {
+                    id: pageTransition
+                    ParallelAnimation {
+                        NumberAnimation {
+                            target: pages
+                            property: "opacity"
+                            to: 0.84
+                            duration: 65
+                            easing.type: Easing.OutCubic
+                        }
+                        NumberAnimation {
+                            target: pages
+                            property: "scale"
+                            to: 0.992
+                            duration: 65
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                    ParallelAnimation {
+                        NumberAnimation {
+                            target: pages
+                            property: "opacity"
+                            to: 1
+                            duration: 150
+                            easing.type: Easing.OutCubic
+                        }
+                        NumberAnimation {
+                            target: pages
+                            property: "scale"
+                            to: 1
+                            duration: 150
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+                }
 
                 // OWNER PAGE
                 Item {
@@ -774,12 +813,12 @@ ApplicationWindow {
                                 anchors.margins: 10
                                 clip: true
                                 contentWidth: width
-                                contentHeight: logsArea.implicitHeight
+                                contentHeight: logsArea.height
 
                                 TextArea {
                                     id: logsArea
                                     width: logFlick.width
-                                    height: Math.max(logFlick.height, implicitHeight)
+                                    height: Math.max(logFlick.height, contentHeight + topPadding + bottomPadding)
                                     text: backend.logsText
                                     readOnly: true
                                     selectByMouse: true
