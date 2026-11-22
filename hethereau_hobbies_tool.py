@@ -2009,8 +2009,8 @@ class OwnerSelectionApp:
     ) -> dict | None:
         """Focus the game and verify counters from independent screenshots.
 
-        Energy must match exactly in two reads. Income must have a confirmed,
-        matching target and a non-decreasing current value in two reads.
+        Energy and income must both match exactly in two reads. The income
+        counter is not expected to change while the worker is waiting to click.
         Nothing should click through an ambiguous state.
         """
         if self.stop_event.is_set() and not allow_when_stopped:
@@ -2233,6 +2233,9 @@ class OwnerSelectionApp:
         # Re-acquire the game focus immediately before sending the click. The
         # OCR scan may take several seconds and focus can change meanwhile.
         hwnd = self._bring_game_to_front()
+        if self.stop_event.is_set():
+            self.log(f"Клик «{name}» отменён: получена команда остановки.")
+            return False
         x, y = self._point(name)
         self.log(
             f"Отправляю клик «{name}»: HWND={hwnd}, экранные координаты ({x}, {y})."
