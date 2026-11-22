@@ -69,9 +69,9 @@ Get the latest published version from **[GitHub Releases](https://github.com/M1S
 
 | Platform | Package | Notes |
 |---|---|---|
-| **Windows 10/11 x64** | `Hethereau-HHT-Windows-x64.exe` | Portable single-file app; Tesseract OCR is bundled |
+| **Windows 10/11 x64** | `Hethereau-HHT-Windows-x64-VERSION.exe` | Portable single-file app; Tesseract OCR is bundled |
 | **Debian / Ubuntu x86_64** | `hethereau-hobbies-tool_VERSION_amd64.deb` | Installable package for X11 |
-| **Linux x86_64** | `Hethereau-HHT-Linux-x86_64.tar.gz` | Portable PyInstaller folder; install Tesseract separately |
+| **Linux x86_64** | `Hethereau-HHT-Linux-x86_64-VERSION.tar.gz` | Portable PyInstaller folder; install Tesseract separately |
 
 No release yet? The latest CI packages can be downloaded from **[Actions → Build HHT packages](https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml)**. Open a successful run and download the `HHT-windows-x64` or `HHT-linux-x86_64` artifact.
 
@@ -79,7 +79,7 @@ No release yet? The latest CI packages can be downloaded from **[Actions → Bui
 
 ### Windows
 
-1. Download `Hethereau-HHT-Windows-x64.exe` from [Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
+1. Download the versioned `Hethereau-HHT-Windows-x64-VERSION.exe` file from [Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
 2. Launch HHT and approve the Windows UAC prompt.
 3. Open **Owner's Selection** in NTE.
 4. Wait until HHT finds `HTGame.exe`.
