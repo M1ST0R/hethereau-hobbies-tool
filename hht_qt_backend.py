@@ -73,6 +73,8 @@ class HHTBackend(QObject):
         core.game_screen_context = "outside_event"
         core.stop_event = threading.Event()
         core.pause_event = threading.Event()
+        core._state_scan_lock = threading.RLock()
+        core._known_energy_max = None
         core.worker_thread = None
         core.active_income_ocr_thread = None
         core.hotkey_listener = None
