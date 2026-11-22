@@ -22,6 +22,10 @@ class SelectRatioCandidateTests(unittest.TestCase):
 
     def test_numerator_above_confirmed_maximum_is_rejected(self):
         self.assertEqual(parse_ratio_text("710", expected_max=700), [])
+
+    def test_denominator_only_is_not_misread_as_full_energy(self):
+        self.assertEqual(parse_ratio_text("700", expected_max=700), [])
+
     def test_single_complete_ratio_is_provisional_not_rejected(self):
         result = select_ratio_candidate([(292, 700, "292/700")])
 
