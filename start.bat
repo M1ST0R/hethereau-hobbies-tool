@@ -18,5 +18,5 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-py hethereau_hobbies_tool.py
+py hht_qt_main.py
 if errorlevel 1 pause
