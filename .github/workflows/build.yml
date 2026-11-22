@@ -59,7 +59,8 @@ jobs:
           if (!(Test-Path "$tesseractDir\tesseract.exe")) { throw "Tesseract was not found at $tesseractDir" }
           $iconArgs = @()
           if (Test-Path "assets/app_icon.png") {
-            py -c "from PIL import Image; Image.open('assets/app_icon.png').convert('RGBA').save('assets/app_icon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+            python -c "from PIL import Image; Image.open('assets/app_icon.png').convert('RGBA').save('assets/app_icon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+            if (!(Test-Path "assets/app_icon.ico")) { throw "Failed to generate assets/app_icon.ico" }
             $iconArgs = @("--icon", "assets/app_icon.ico")
           }
           pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --name "HHT" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all svglib --collect-all reportlab --collect-all rlPyCairo --collect-all cairocffi --hidden-import cairo --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" @iconArgs hethereau_hobbies_tool.py
