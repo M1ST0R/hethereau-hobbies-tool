@@ -148,9 +148,9 @@ jobs:
           Categories=Game;Utility;
           DESKTOP
 
-          cat > "$PACKAGE_ROOT/DEBIAN/control" <<CONTROL
+          cat > "$PACKAGE_ROOT/DEBIAN/control" <<'CONTROL'
           Package: hethereau-hobbies-tool
-          Version: $DEB_VERSION
+          Version: @HHT_DEB_VERSION@
           Section: games
           Priority: optional
           Architecture: amd64
@@ -159,6 +159,7 @@ jobs:
           Description: Hethereau Hobbies Tool (HHT)
            Desktop automation toolkit for hobbies in Neverness to Everness.
           CONTROL
+          sed -i "s|@HHT_DEB_VERSION@|$DEB_VERSION|" "$PACKAGE_ROOT/DEBIAN/control"
 
           dpkg-deb --build "$PACKAGE_ROOT" "release/hethereau-hobbies-tool_${DEB_VERSION}_amd64.deb"
 
