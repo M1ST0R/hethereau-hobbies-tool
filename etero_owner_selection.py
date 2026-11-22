@@ -730,6 +730,10 @@ class OwnerSelectionApp:
             else:
                 status_icon, icon_tone = "info", "accent"
             self.status_icon_label.configure(image=self.symbol_image(status_icon, 19, icon_tone))
+            next_action_icon = "pause" if any(
+                word in status for word in ("РАБОТАЕТ", "ЗАПУСК", "ФАРМ", "ПОЛУЧАЮ", "ОТКРЫВАЮ", "ПРОВЕРКА", "ЗАВЕРШАЮ")
+            ) else "play_arrow"
+            self.toggle_button.configure(image=self.symbol_image(next_action_icon, 22, "normal"))
             self.status_badge.configure(text=self.tr(status), text_color=color, fg_color=fg)
             if stage is not None:
                 self.stage_label.configure(text=self.tr(stage))

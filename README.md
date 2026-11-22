@@ -41,7 +41,7 @@ The latest workflow build is also available under the repository's **Actions →
 3. Open the Owner's Selection event in the game.
 4. Confirm that HOST has found HTGame.exe, then press Start or F6.
 
-For running from source, install Python 3.10+, install Tesseract OCR, then run start.bat.
+For running from source, install Python 3.10+, install Tesseract OCR, then run start.bat. The starter requests administrator privileges before installing dependencies.
 
 ### Linux (Debian / Ubuntu, X11)
 
