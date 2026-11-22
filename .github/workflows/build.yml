@@ -104,7 +104,7 @@ jobs:
             if (!(Test-Path "assets/app_icon.ico")) { throw "Failed to generate assets/app_icon.ico" }
             $iconArgs = @("--icon", "assets/app_icon.ico")
           }
-          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --name "HHT" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all cairosvg --collect-all cairocffi --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" @iconArgs hethereau_hobbies_tool.py
+          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --name "HHT" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all resvg_py --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" @iconArgs hethereau_hobbies_tool.py
           New-Item -ItemType Directory -Force release | Out-Null
           $version = "${{ steps.version.outputs.version }}"
           Copy-Item "dist\HHT.exe" "release\Hethereau-HHT-Windows-x64-$version.exe"
@@ -114,7 +114,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pyinstaller --noconfirm --clean --onedir --name HHT --add-data "assets:assets" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --collect-all cairosvg --collect-all cairocffi --hidden-import pynput.keyboard._xorg hethereau_hobbies_tool.py
+          pyinstaller --noconfirm --clean --onedir --name HHT --add-data "assets:assets" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --collect-all resvg_py --hidden-import pynput.keyboard._xorg hethereau_hobbies_tool.py
 
           VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ steps.version.outputs.channel }}"
