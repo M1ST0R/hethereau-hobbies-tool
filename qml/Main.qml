@@ -1175,6 +1175,9 @@ ApplicationWindow {
                 }
 
                 // =========================================================
+                    }
+                }
+
                 // MODULE 02 — FISHING PLACEHOLDER
                 // =========================================================
                 Item {
@@ -1933,6 +1936,9 @@ ApplicationWindow {
         }
     }
 
+    }
+
+        }
     }
 
     // Native edge resizing, with custom title-bar controls.
