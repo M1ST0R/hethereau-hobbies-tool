@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import io
+import tkinter as tk
 import webbrowser
 from datetime import datetime
 
@@ -132,6 +133,18 @@ EN_TRANSLATIONS = {
     "Новые занятия, включая рыбалку, будут добавляться отдельными модулями.": "New activities, including fishing, will be added as separate modules.",
     "Версия": "Version",
     "Открыть GitHub": "Open GitHub",
+    "Владелец": "Owner",
+    "РАЗДЕЛЫ": "WORKSPACE",
+    "Автоматизация события «Подборка владельца»": "Owner's Selection automation",
+    "Журнал событий": "Activity log",
+    "История работы и диагностика автоматизации": "Automation history and diagnostics",
+    "Копировать выделенное": "Copy selection",
+    "Копировать всё": "Copy all",
+    "Очистить": "Clear",
+    "записей": "entries",
+    "Сначала выдели нужную часть журнала мышью.": "Select the log text you want to copy first.",
+    "Выделенный фрагмент журнала скопирован.": "Selected log excerpt copied.",
+    "Весь журнал скопирован.": "Full log copied.",
     "Development build": "Development build",
     "Release build": "Release build",
     "↻  Обновить окно": "↻  Refresh game window",
@@ -366,8 +379,8 @@ class OwnerSelectionApp:
         self.current_stage = "Ожидание запуска"
         self.log_history: list[tuple[str, str]] = []
         self.root.title(APP_TITLE)
-        self.root.geometry("900x790")
-        self.root.minsize(780, 710)
+        self.root.geometry("1080x800")
+        self.root.minsize(900, 680)
         self.root.configure(fg_color=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self._symbol_cache: dict[tuple[str, int, str], ctk.CTkImage] = {}
@@ -375,9 +388,8 @@ class OwnerSelectionApp:
         self._logo_pil: Image.Image | None = None
         self._window_icon_photo = None
         self._window_icon_photos: list[ImageTk.PhotoImage] = []
-        self.logs_window = None
-        self.about_window = None
         self.log_text = None
+        self.log_context_menu = None
         self._load_visual_assets()
 
         configure_tesseract()
@@ -394,6 +406,10 @@ class OwnerSelectionApp:
         self.cycle_count = 0
         self.last_ocr_meta = ""
         self.last_ocr_debug_path = ""
+        self.current_page = "owner"
+        self.rescan_requested = threading.Event()
+        self.last_resume_scan: dict | None = None
+        self.worker_error: tuple[str, str] | None = None
 
         self.metric_labels: dict[str, ctk.CTkLabel] = {}
         self._build_ui()
@@ -575,25 +591,19 @@ class OwnerSelectionApp:
         return translated
 
     def _close_auxiliary_windows(self):
-        for attr in ("logs_window", "about_window"):
-            window = getattr(self, attr, None)
-            if window is not None:
-                try:
-                    if window.winfo_exists():
-                        window.destroy()
-                except Exception:
-                    pass
-                setattr(self, attr, None)
-        self.log_text = None
+        # Logs and About are embedded pages now; there are no Toplevel windows.
+        return
 
     def _rebuild_ui(self):
-        self._close_auxiliary_windows()
+        current_page = self.current_page
         for child in self.root.winfo_children():
             child.destroy()
         self.metric_labels = {}
+        self._symbol_cache.clear()
         self.root.configure(fg_color=BG)
         self._build_ui()
         self.root.title(APP_TITLE)
+        self._show_page(current_page)
         self.set_status(self.current_status, self.current_stage)
         for metric, value in self.ui_metrics.items():
             self.set_metric(metric, value)
@@ -617,79 +627,105 @@ class OwnerSelectionApp:
 
     # -------------------------------- UI ----------------------------------
     def _build_ui(self):
-        outer = ctk.CTkFrame(self.root, fg_color=BG, corner_radius=0)
-        outer.pack(fill="both", expand=True, padx=22, pady=20)
+        self.app_shell = ctk.CTkFrame(self.root, fg_color=BG, corner_radius=0)
+        self.app_shell.pack(fill="both", expand=True, padx=14, pady=14)
+        self.sidebar = ctk.CTkFrame(self.app_shell, width=196, fg_color=PANEL,
+            corner_radius=18, border_width=1, border_color=BORDER)
+        self.sidebar.pack(side="left", fill="y", padx=(0, 14))
+        self.sidebar.pack_propagate(False)
 
-        # Header
-        header = ctk.CTkFrame(outer, fg_color="transparent")
-        header.pack(fill="x", pady=(0, 16))
+        brand = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        brand.pack(fill="x", padx=15, pady=(19, 25))
         if self._logo_pil is not None:
-            self._header_logo = ctk.CTkImage(
-                light_image=self._logo_pil, dark_image=self._logo_pil, size=(52, 52)
-            )
-            ctk.CTkLabel(header, text="", image=self._header_logo).pack(
-                side="left", padx=(0, 13), anchor="center"
-            )
-        title_box = ctk.CTkFrame(header, fg_color="transparent")
-        title_box.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(
-            title_box, text=self.tr("HETHEREAU HOBBIES TOOL"), text_color=ACCENT,
-            font=ctk.CTkFont("Segoe UI", 14, "bold")
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            title_box, text=self.tr("Автоматизация игровых хобби NTE"), text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 23, "bold")
-        ).pack(anchor="w", pady=(1, 0))
-        ctk.CTkLabel(
-            title_box, text=self.tr("Текущий модуль: Подборка владельца"), text_color=MUTED,
-            font=ctk.CTkFont("Segoe UI", 11)
-        ).pack(anchor="w", pady=(1, 0))
+            self._sidebar_logo = ctk.CTkImage(light_image=self._logo_pil,
+                dark_image=self._logo_pil, size=(42, 42))
+            ctk.CTkLabel(brand, text="", image=self._sidebar_logo).pack(side="left", padx=(0, 10))
+        brand_text = ctk.CTkFrame(brand, fg_color="transparent")
+        brand_text.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(brand_text, text="HETHEREAU", text_color=ACCENT,
+            font=ctk.CTkFont("Segoe UI", 10, "bold")).pack(anchor="w")
+        ctk.CTkLabel(brand_text, text="HOBBIES TOOL", text_color=TEXT,
+            font=ctk.CTkFont("Segoe UI", 13, "bold")).pack(anchor="w")
+        ctk.CTkLabel(self.sidebar, text=self.tr("РАЗДЕЛЫ"), text_color=MUTED,
+            font=ctk.CTkFont("Segoe UI", 9, "bold"), anchor="w").pack(fill="x", padx=17, pady=(0, 9))
 
-        self.refresh_button = ctk.CTkButton(
-            header, text=self.tr("Обновить окно"),
-            image=self.symbol_image("refresh", 17, "muted"), compound="left",
-            width=142, height=36,
+        nav_items = (("owner", "Владелец", "sports_esports"),
+                     ("about", "О программе", "info"),
+                     ("logs", "Логи", "article"))
+        self.nav_buttons = {}
+        for page_key, label, icon_name in nav_items:
+            button = ctk.CTkButton(
+                self.sidebar, text=self.tr(label),
+                image=self.symbol_image(icon_name, 20, "normal"), compound="left", anchor="w",
+                height=46, corner_radius=11, fg_color="transparent", hover_color=PANEL_ALT,
+                text_color=TEXT, font=ctk.CTkFont("Segoe UI", 12, "bold"),
+                command=lambda key=page_key: self._show_page(key),
+            )
+            button.pack(fill="x", padx=10, pady=3)
+            self.nav_buttons[page_key] = button
+
+        ctk.CTkFrame(self.sidebar, fg_color="transparent").pack(fill="both", expand=True)
+        ctk.CTkLabel(self.sidebar, text=f"v{APP_VERSION}", text_color=MUTED,
+            font=ctk.CTkFont("Segoe UI", 9)).pack(side="bottom", pady=(0, 5))
+        ctk.CTkLabel(self.sidebar, text="F6 START / PAUSE · F7 STOP", text_color=MUTED,
+            font=ctk.CTkFont("Segoe UI", 8)).pack(side="bottom", pady=(0, 15))
+
+        self.main_area = ctk.CTkFrame(self.app_shell, fg_color="transparent", corner_radius=0)
+        self.main_area.pack(side="left", fill="both", expand=True)
+        header = ctk.CTkFrame(self.main_area, fg_color="transparent")
+        header.pack(fill="x", pady=(2, 13))
+        header_title = ctk.CTkFrame(header, fg_color="transparent")
+        header_title.pack(side="left", fill="x", expand=True)
+        self.page_heading = ctk.CTkLabel(header_title, text=self.tr("Владелец"),
+            text_color=TEXT, font=ctk.CTkFont("Segoe UI", 23, "bold"))
+        self.page_heading.pack(anchor="w")
+        self.page_subtitle = ctk.CTkLabel(header_title,
+            text=self.tr("Автоматизация игровых хобби NTE"), text_color=MUTED,
+            font=ctk.CTkFont("Segoe UI", 11))
+        self.page_subtitle.pack(anchor="w", pady=(1, 0))
+
+        self.refresh_button = ctk.CTkButton(header, text=self.tr("Обновить окно"),
+            image=self.symbol_image("refresh", 17, "muted"), compound="left", width=132, height=36,
             fg_color=PANEL_ALT, hover_color=BORDER, text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 11, "bold"),
-            command=self.refresh_game_window,
-        )
-        self.refresh_button.pack(side="right", anchor="center", padx=(8, 0))
-
-        ctk.CTkLabel(
-            header, text="",
-            image=self.symbol_image("dark_mode" if self.theme_mode == "dark" else "light_mode", 18, "muted"),
+            font=ctk.CTkFont("Segoe UI", 10, "bold"), command=self.refresh_game_window)
+        self.refresh_button.pack(side="right", padx=(8, 0), anchor="center")
+        ctk.CTkLabel(header, text="", image=self.symbol_image(
+            "dark_mode" if self.theme_mode == "dark" else "light_mode", 18, "muted")
         ).pack(side="right", padx=(0, 2), anchor="center")
-        self.theme_switch = ctk.CTkSwitch(
-            header, text=self.tr("Тёмная тема"),
+        self.theme_switch = ctk.CTkSwitch(header, text=self.tr("Тёмная тема"),
             onvalue="dark", offvalue="light", command=self._theme_changed,
             fg_color=BORDER, progress_color=ACCENT, button_color=TEXT,
             button_hover_color=ACCENT_HOVER, text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 10, "bold"),
-        )
+            font=ctk.CTkFont("Segoe UI", 10, "bold"))
         self.theme_switch.pack(side="right", padx=(10, 8), anchor="center")
-        if self.theme_mode == "dark":
-            self.theme_switch.select()
-        else:
-            self.theme_switch.deselect()
+        if self.theme_mode == "dark": self.theme_switch.select()
+        else: self.theme_switch.deselect()
 
         language_box = ctk.CTkFrame(header, fg_color="transparent")
         language_box.pack(side="right", padx=(8, 0), anchor="center")
-        ctk.CTkLabel(
-            language_box, text="", image=self.symbol_image("language", 18, "muted"),
-        ).pack(side="left", padx=(0, 5))
-        self.language_menu = ctk.CTkOptionMenu(
-            language_box,
-            values=list(SUPPORTED_LANGUAGES.values()),
-            command=self._language_changed,
-            width=112, height=34,
-            fg_color=PANEL_ALT, button_color=PANEL_ALT,
+        ctk.CTkLabel(language_box, text="",
+            image=self.symbol_image("language", 18, "muted")).pack(side="left", padx=(0, 5))
+        self.language_menu = ctk.CTkOptionMenu(language_box,
+            values=list(SUPPORTED_LANGUAGES.values()), command=self._language_changed,
+            width=108, height=34, fg_color=PANEL_ALT, button_color=PANEL_ALT,
             button_hover_color=BORDER, dropdown_fg_color=PANEL,
             dropdown_hover_color=PANEL_ALT, dropdown_text_color=TEXT,
-            text_color=TEXT, font=ctk.CTkFont("Segoe UI", 10, "bold"),
-        )
+            text_color=TEXT, font=ctk.CTkFont("Segoe UI", 10, "bold"))
         self.language_menu.set(SUPPORTED_LANGUAGES.get(self.language, "English"))
         self.language_menu.pack(side="left")
 
+        self.pages_container = ctk.CTkFrame(self.main_area, fg_color="transparent", corner_radius=0)
+        self.pages_container.pack(fill="both", expand=True)
+        self.page_frames = {
+            "owner": ctk.CTkFrame(self.pages_container, fg_color="transparent", corner_radius=0),
+            "about": ctk.CTkFrame(self.pages_container, fg_color="transparent", corner_radius=0),
+            "logs": ctk.CTkFrame(self.pages_container, fg_color="transparent", corner_radius=0),
+        }
+        self.owner_page = self.page_frames["owner"]
+        outer = ctk.CTkFrame(self.owner_page, fg_color="transparent", corner_radius=0)
+        outer.pack(fill="both", expand=True)
+
+        # Owner's Selection module
         # Game connection strip
         connection = ctk.CTkFrame(
             outer, fg_color=PANEL, corner_radius=14,
@@ -833,109 +869,186 @@ class OwnerSelectionApp:
             font=ctk.CTkFont("Segoe UI", 11),
         ).pack(side="left", padx=(8, 0))
 
-        # Footer actions
-        footer = ctk.CTkFrame(outer, fg_color="transparent")
-        footer.pack(fill="x", pady=(4, 0))
-        self.logs_button = ctk.CTkButton(
-            footer, text=self.tr("Посмотреть логи"),
-            image=self.symbol_image("article", 18, "muted"), compound="left",
-            height=40, fg_color=PANEL_ALT, hover_color=BORDER, text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 11, "bold"),
-            command=self.open_logs,
-        )
-        self.logs_button.pack(side="left", fill="x", expand=True, padx=(0, 5))
-        self.about_button = ctk.CTkButton(
-            footer, text=self.tr("О программе"),
-            image=self.symbol_image("info", 18, "muted"), compound="left",
-            height=40, fg_color=PANEL_ALT, hover_color=BORDER, text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 11, "bold"),
-            command=self.open_about,
-        )
-        self.about_button.pack(side="left", fill="x", expand=True, padx=(5, 0))
-
+        self._build_about_page()
+        self._build_logs_page()
+        self._show_page(getattr(self, "current_page", "owner"))
     # ----------------------------- UI HELPERS -----------------------------
+    def _show_page(self, page: str):
+        if page not in self.page_frames: page = "owner"
+        self.current_page = page
+        for frame in self.page_frames.values(): frame.pack_forget()
+        self.page_frames[page].pack(fill="both", expand=True)
+        headings = {
+            "owner": ("Владелец", "Автоматизация события «Подборка владельца»"),
+            "about": ("О программе", "Hethereau Hobbies Tool"),
+            "logs": ("Логи", "История работы и диагностика автоматизации"),
+        }
+        title, subtitle = headings[page]
+        self.page_heading.configure(text=self.tr(title))
+        self.page_subtitle.configure(text=self.tr(subtitle))
+        for key, button in self.nav_buttons.items():
+            active = key == page
+            button.configure(fg_color=ACCENT if active else "transparent",
+                hover_color=ACCENT_HOVER if active else PANEL_ALT,
+                text_color="#FFFFFF" if active else TEXT)
+
+    def _build_about_page(self):
+        card = ctk.CTkFrame(self.page_frames["about"], fg_color=PANEL,
+            corner_radius=20, border_width=1, border_color=BORDER)
+        card.pack(fill="both", expand=True, padx=4, pady=4)
+        hero = ctk.CTkFrame(card, fg_color="transparent")
+        hero.pack(fill="x", padx=28, pady=(30, 20))
+        if self._logo_pil is not None:
+            self._about_logo = ctk.CTkImage(light_image=self._logo_pil,
+                dark_image=self._logo_pil, size=(108, 108))
+            ctk.CTkLabel(hero, text="", image=self._about_logo).pack(side="left", padx=(0, 22))
+        title_box = ctk.CTkFrame(hero, fg_color="transparent")
+        title_box.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(title_box, text="HETHEREAU HOBBIES TOOL", text_color=ACCENT,
+            font=ctk.CTkFont("Segoe UI", 12, "bold")).pack(anchor="w")
+        ctk.CTkLabel(title_box, text=APP_TITLE, text_color=TEXT,
+            font=ctk.CTkFont("Segoe UI", 24, "bold")).pack(anchor="w", pady=(5, 3))
+        channel = self.tr("Development build") if APP_CHANNEL == "dev" else self.tr("Release build")
+        ctk.CTkLabel(title_box, text=f"{self.tr('Версия')} {APP_VERSION} · {channel}",
+            text_color=MUTED, font=ctk.CTkFont("Segoe UI", 11)).pack(anchor="w")
+        ctk.CTkFrame(card, height=1, fg_color=BORDER).pack(fill="x", padx=28, pady=(0, 22))
+        descriptions = (
+            "Утилита для автоматизации игровых хобби в Neverness to Everness.",
+            "Сейчас доступен модуль «Подборка владельца».",
+            "Новые занятия, включая рыбалку, будут добавляться отдельными модулями.",
+        )
+        ctk.CTkLabel(card, text="\n\n".join(self.tr(line) for line in descriptions),
+            text_color=TEXT, font=ctk.CTkFont("Segoe UI", 13), justify="left",
+            anchor="w", wraplength=680).pack(fill="x", padx=32, pady=(0, 25))
+        details = ctk.CTkFrame(card, fg_color=PANEL_ALT, corner_radius=13)
+        details.pack(fill="x", padx=28, pady=(0, 20))
+        for label, value in (("Модуль", "Подборка владельца"), ("Процесс игры", "HTGame.exe"),
+            ("Горячие клавиши", "F6 — запуск / пауза    ·    F7 — стоп")):
+            row = ctk.CTkFrame(details, fg_color="transparent")
+            row.pack(fill="x", padx=16, pady=9)
+            ctk.CTkLabel(row, text=self.tr(label), text_color=MUTED,
+                font=ctk.CTkFont("Segoe UI", 11)).pack(side="left")
+            ctk.CTkLabel(row, text=self.tr(value), text_color=TEXT,
+                font=ctk.CTkFont("Segoe UI", 11, "bold")).pack(side="right")
+        ctk.CTkButton(card, text=self.tr("Открыть GitHub"),
+            image=self.symbol_image("open_in_new", 17, "normal"), compound="left",
+            width=180, height=40, fg_color=ACCENT, hover_color=ACCENT_HOVER,
+            text_color="#FFFFFF", command=lambda: webbrowser.open(APP_GITHUB_URL)
+        ).pack(anchor="w", padx=28, pady=(0, 28))
+
+    def _build_logs_page(self):
+        page = self.page_frames["logs"]
+        toolbar = ctk.CTkFrame(page, fg_color="transparent")
+        toolbar.pack(fill="x", pady=(2, 10))
+        title_box = ctk.CTkFrame(toolbar, fg_color="transparent")
+        title_box.pack(side="left", fill="x", expand=True)
+        ctk.CTkLabel(title_box, text=self.tr("Журнал событий"), text_color=TEXT,
+            font=ctk.CTkFont("Segoe UI", 17, "bold")).pack(anchor="w")
+        self.logs_count_label = ctk.CTkLabel(title_box, text="0 записей", text_color=MUTED,
+            font=ctk.CTkFont("Segoe UI", 10))
+        self.logs_count_label.pack(anchor="w", pady=(2, 0))
+        specs = (
+            ("Копировать выделенное", "copy_all", self.copy_selected_logs, PANEL_ALT, TEXT),
+            ("Копировать всё", "article", self.copy_logs, PANEL_ALT, TEXT),
+            ("Очистить", "delete", self.clear_logs, STOP_BG, STOP_TEXT),
+        )
+        for label, icon, command, fg, color in specs:
+            ctk.CTkButton(toolbar, text=self.tr(label),
+                image=self.symbol_image(icon, 16, "muted" if fg == PANEL_ALT else "danger"),
+                compound="left", height=36, fg_color=fg,
+                hover_color=BORDER if fg == PANEL_ALT else STOP_HOVER,
+                text_color=color, font=ctk.CTkFont("Segoe UI", 10, "bold"),
+                command=command).pack(side="right", padx=(7, 0))
+        log_card = ctk.CTkFrame(page, fg_color=LOG_BG, corner_radius=14,
+            border_width=1, border_color=BORDER)
+        log_card.pack(fill="both", expand=True)
+        self.log_text = ctk.CTkTextbox(log_card, corner_radius=12, fg_color=LOG_BG,
+            border_width=0, text_color=LOG_TEXT,
+            font=ctk.CTkFont("Consolas", 10), wrap="word")
+        self.log_text.pack(fill="both", expand=True, padx=10, pady=10)
+        for stamp, entry in self.log_history:
+            self.log_text.insert("end", f"{stamp}  ·  {self.tr(entry)}\n")
+        self.log_text.configure(state="disabled")
+        self.log_text.see("end")
+        text_widget = getattr(self.log_text, "_textbox", self.log_text)
+        text_widget.bind("<Control-c>", self._on_log_copy_shortcut)
+        text_widget.bind("<Control-C>", self._on_log_copy_shortcut)
+        text_widget.bind("<Button-3>", self._show_log_context_menu)
+        self.log_context_menu = tk.Menu(self.root, tearoff=0,
+            background=PANEL, foreground=TEXT,
+            activebackground=ACCENT, activeforeground="#FFFFFF")
+        self.log_context_menu.add_command(label=self.tr("Копировать выделенное"), command=self.copy_selected_logs)
+        self.log_context_menu.add_command(label=self.tr("Копировать всё"), command=self.copy_logs)
+        self.log_context_menu.add_separator()
+        self.log_context_menu.add_command(label=self.tr("Очистить"), command=self.clear_logs)
+        self._update_logs_count()
+
+    def _update_logs_count(self):
+        if hasattr(self, "logs_count_label"):
+            try:
+                self.logs_count_label.configure(text=f"{len(self.log_history)} {self.tr('записей')}")
+            except Exception:
+                pass
+
+    def _on_log_copy_shortcut(self, _event=None):
+        self.copy_selected_logs()
+        return "break"
+
+    def _show_log_context_menu(self, event):
+        try:
+            self.log_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.log_context_menu.grab_release()
+
+    def open_logs(self): self._show_page("logs")
+    def open_about(self): self._show_page("about")
+
     def log(self, message: str):
         stamp = datetime.now().strftime("%H:%M:%S")
         self.log_history.append((stamp, message))
         self.log_history = self.log_history[-1000:]
-
         def write():
-            if self.closed or self.log_text is None:
-                return
+            if self.closed or self.log_text is None: return
             try:
-                if self.logs_window is None or not self.logs_window.winfo_exists():
-                    self.log_text = None
-                    return
+                if not self.log_text.winfo_exists(): return
                 self.log_text.configure(state="normal")
                 self.log_text.insert("end", f"{stamp}  ·  {self.tr(message)}\n")
+                line_count = int(self.log_text.index("end-1c").split(".")[0])
+                if line_count > len(self.log_history):
+                    self.log_text.delete("1.0", f"{line_count-len(self.log_history)+1}.0")
                 self.log_text.see("end")
                 self.log_text.configure(state="disabled")
-            except Exception:
-                self.log_text = None
-
-        if threading.current_thread() is threading.main_thread():
-            write()
-        else:
-            self.root.after(0, write)
-
-    def open_logs(self):
-        if self.logs_window is not None:
-            try:
-                if self.logs_window.winfo_exists():
-                    self.logs_window.lift()
-                    self.logs_window.focus_force()
-                    return
+                self._update_logs_count()
             except Exception:
                 pass
-        window = ctk.CTkToplevel(self.root)
-        self.logs_window = window
-        window.title(self.tr("Логи") + " — " + APP_TITLE)
-        window.geometry("820x500")
-        window.minsize(640, 360)
-        window.configure(fg_color=BG)
-        window.protocol("WM_DELETE_WINDOW", self._close_logs_window)
+        if threading.current_thread() is threading.main_thread(): write()
+        else: self.root.after(0, write)
 
-        toolbar = ctk.CTkFrame(window, fg_color="transparent")
-        toolbar.pack(fill="x", padx=16, pady=(14, 8))
-        ctk.CTkLabel(
-            toolbar, text=self.tr("Логи"), text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 18, "bold"),
-        ).pack(side="left")
-        ctk.CTkButton(
-            toolbar, text=self.tr("Очистить"),
-            image=self.symbol_image("delete", 16, "danger"), compound="left",
-            width=100, height=32, fg_color=STOP_BG, hover_color=STOP_HOVER,
-            text_color=STOP_TEXT, command=self.clear_logs,
-        ).pack(side="right", padx=(6, 0))
-        ctk.CTkButton(
-            toolbar, text=self.tr("Копировать"),
-            image=self.symbol_image("copy_all", 16, "muted"), compound="left",
-            width=110, height=32, fg_color=PANEL_ALT, hover_color=BORDER,
-            text_color=TEXT, command=self.copy_logs,
-        ).pack(side="right")
+    def _copy_text_to_clipboard(self, content: str) -> bool:
+        try:
+            self.root.clipboard_clear()
+            self.root.clipboard_append(content)
+            self.root.update_idletasks()
+            return True
+        except Exception as exc:
+            self.log(f"Не удалось скопировать текст: {exc}")
+            return False
 
-        self.log_text = ctk.CTkTextbox(
-            window, corner_radius=12, fg_color=LOG_BG, border_width=1,
-            border_color=BORDER, text_color=LOG_TEXT,
-            font=ctk.CTkFont("Consolas", 10), wrap="word",
-        )
-        self.log_text.pack(fill="both", expand=True, padx=16, pady=(0, 16))
-        self.log_text.configure(state="normal")
-        for stamp, entry in self.log_history:
-            self.log_text.insert("end", f"{stamp}  ·  {self.tr(entry)}\n")
-        self.log_text.see("end")
-        self.log_text.configure(state="disabled")
-        window.transient(self.root)
+    def copy_selected_logs(self):
+        if self.log_text is None: return
+        try:
+            selected = self.log_text.get("sel.first", "sel.last")
+        except tk.TclError:
+            selected = ""
+        if not selected:
+            self.log("Сначала выдели нужную часть журнала мышью.")
+            return
+        if self._copy_text_to_clipboard(selected):
+            self.log("Выделенный фрагмент журнала скопирован.")
 
-    def _close_logs_window(self):
-        window = self.logs_window
-        self.logs_window = None
-        self.log_text = None
-        if window is not None:
-            try:
-                window.destroy()
-            except Exception:
-                pass
+    def copy_logs(self):
+        content = "\n".join(f"{stamp}  ·  {self.tr(entry)}" for stamp, entry in self.log_history)
+        if self._copy_text_to_clipboard(content): self.log("Весь журнал скопирован.")
 
     def clear_logs(self):
         self.log_history.clear()
@@ -943,83 +1056,7 @@ class OwnerSelectionApp:
             self.log_text.configure(state="normal")
             self.log_text.delete("1.0", "end")
             self.log_text.configure(state="disabled")
-
-    def copy_logs(self):
-        content = "\n".join(f"{stamp}  ·  {self.tr(entry)}" for stamp, entry in self.log_history)
-        self.root.clipboard_clear()
-        self.root.clipboard_append(content)
-        self.log("Журнал скопирован в буфер обмена.")
-
-    def open_about(self):
-        if self.about_window is not None:
-            try:
-                if self.about_window.winfo_exists():
-                    self.about_window.lift()
-                    self.about_window.focus_force()
-                    return
-            except Exception:
-                pass
-        window = ctk.CTkToplevel(self.root)
-        self.about_window = window
-        window.title(self.tr("О программе") + " — " + APP_TITLE)
-        window.geometry("520x390")
-        window.minsize(460, 340)
-        window.configure(fg_color=BG)
-        window.protocol("WM_DELETE_WINDOW", self._close_about_window)
-
-        card = ctk.CTkFrame(window, fg_color=PANEL, corner_radius=18, border_width=1, border_color=BORDER)
-        card.pack(fill="both", expand=True, padx=18, pady=18)
-        ctk.CTkLabel(
-            card, text="HHT", text_color=ACCENT,
-            font=ctk.CTkFont("Segoe UI", 34, "bold"),
-        ).pack(pady=(24, 2))
-        ctk.CTkLabel(
-            card, text=APP_TITLE, text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 17, "bold"),
-        ).pack(pady=(0, 6))
-        ctk.CTkLabel(
-            card,
-            text=(
-                f"{self.tr('Версия')} {APP_VERSION} · "
-                f"{self.tr('Development build') if APP_CHANNEL == 'dev' else self.tr('Release build')}"
-            ),
-            text_color=MUTED,
-            font=ctk.CTkFont("Segoe UI", 11),
-        ).pack(pady=(0, 16))
-
-        about_text = "\n".join([
-            self.tr("Утилита для автоматизации игровых хобби в Neverness to Everness."),
-            self.tr("Сейчас доступен модуль «Подборка владельца»."),
-            self.tr("Новые занятия, включая рыбалку, будут добавляться отдельными модулями."),
-        ])
-        ctk.CTkLabel(
-            card, text=about_text, text_color=TEXT,
-            font=ctk.CTkFont("Segoe UI", 12), justify="center", wraplength=440,
-        ).pack(fill="x", padx=20, pady=(0, 20))
-        actions = ctk.CTkFrame(card, fg_color="transparent")
-        actions.pack(fill="x", padx=22, pady=(0, 20))
-        ctk.CTkButton(
-            actions, text=self.tr("Открыть GitHub"),
-            image=self.symbol_image("open_in_new", 17, "normal"), compound="left",
-            fg_color=PANEL_ALT, hover_color=BORDER, text_color=TEXT,
-            command=lambda: webbrowser.open(APP_GITHUB_URL),
-        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        ctk.CTkButton(
-            actions, text=self.tr("Закрыть"),
-            image=self.symbol_image("close", 17, "muted"), compound="left",
-            fg_color=ACCENT, hover_color=ACCENT_HOVER, text_color="#FFFFFF",
-            command=self._close_about_window,
-        ).pack(side="left", fill="x", expand=True, padx=(5, 0))
-        window.transient(self.root)
-
-    def _close_about_window(self):
-        window = self.about_window
-        self.about_window = None
-        if window is not None:
-            try:
-                window.destroy()
-            except Exception:
-                pass
+        self._update_logs_count()
 
     def set_status(self, status: str, stage: str | None = None):
         self.current_status = status
