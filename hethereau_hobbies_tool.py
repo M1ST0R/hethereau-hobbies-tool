@@ -410,6 +410,7 @@ class OwnerSelectionApp:
         self.rescan_requested = threading.Event()
         self.last_resume_scan: dict | None = None
         self.worker_error: tuple[str, str] | None = None
+        self.last_scan_error = ""
 
         self.metric_labels: dict[str, ctk.CTkLabel] = {}
         self._build_ui()
@@ -1157,9 +1158,11 @@ class OwnerSelectionApp:
     def toggle_run_pause(self):
         if self.worker_thread and self.worker_thread.is_alive():
             if self.pause_event.is_set():
+                self.rescan_requested.set()
+                self.last_resume_scan = None
                 self.pause_event.clear()
-                self.set_status("РАБОТАЕТ", "Продолжаю текущий цикл")
-                self.log("Пауза снята.")
+                self.set_status("ПРОВЕРКА ПОСЛЕ ПАУЗЫ", "Сначала заново проверю энергию и доход")
+                self.log("Пауза снята. Перед следующими кликами проверю энергию и доход.")
             else:
                 self.pause_event.set()
                 self.set_status("ПАУЗА", "Автоматизация приостановлена. Нажми F6 для продолжения.")
@@ -1168,6 +1171,9 @@ class OwnerSelectionApp:
 
         self.stop_event.clear()
         self.pause_event.clear()
+        self.rescan_requested.clear()
+        self.last_resume_scan = None
+        self.worker_error = None
         self.cycle_count = 0
         self.set_metric("cycles", "0")
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
@@ -1687,26 +1693,120 @@ class OwnerSelectionApp:
             self.set_metric("energy", f"{current} / {maximum}")
         return current, maximum, raw
 
-    def test_ocr(self):
-        def run_test():
-            try:
-                self._bring_game_to_front()
-                energy, energy_max, energy_raw = self.read_energy()
-                energy_meta = self.last_ocr_meta
-                energy_debug = self.last_ocr_debug_path
-                income, income_max, income_raw = self.read_income()
-                income_meta = self.last_ocr_meta
-                income_debug = self.last_ocr_debug_path
-                self.log(f"Тест энергии: {energy}/{energy_max}; OCR: {energy_raw!r}; {energy_meta}")
-                if energy is None and energy_debug:
-                    self.log(f"Область энергии: {energy_debug}")
-                self.log(f"Тест дохода: {income}/{income_max}; OCR: {income_raw!r}; {income_meta}")
-                if income is None and income_debug:
-                    self.log(f"Область дохода: {income_debug}")
-            except Exception as exc:
-                self.log(f"Ошибка проверки OCR: {exc}")
+    def _scan_game_state(
+        self,
+        *,
+        include_income: bool = True,
+        reason: str = "проверка состояния",
+        attempts: int = 3,
+    ) -> dict | None:
+        """Focus the game and verify counters from independent screenshots.
 
-        threading.Thread(target=run_test, daemon=True).start()
+        Energy must match exactly in two reads. Income must have a confirmed,
+        matching target and a non-decreasing current value in two reads.
+        Nothing should click through an ambiguous state.
+        """
+        self._bring_game_to_front()
+        time.sleep(0.2)
+
+        for attempt in range(1, attempts + 1):
+            if self.stop_event.is_set():
+                return None
+
+            energy_a, energy_max_a, energy_raw_a = self.read_energy()
+            time.sleep(0.22)
+            energy_b, energy_max_b, energy_raw_b = self.read_energy()
+            energy_ok = (
+                energy_a is not None and energy_b is not None
+                and energy_max_a is not None and energy_max_b is not None
+                and energy_a == energy_b and energy_max_a == energy_max_b
+            )
+
+            scan = {
+                "energy": energy_b if energy_ok else None,
+                "energy_max": energy_max_b if energy_ok else None,
+                "income": None,
+                "income_max": None,
+                "reason": reason,
+            }
+
+            income_ok = not include_income
+            income_raw_a = income_raw_b = ""
+            if include_income:
+                income_a, income_max_a, income_raw_a = self.read_income()
+                if income_a is not None and income_max_a is not None:
+                    time.sleep(0.18)
+                    income_b, income_max_b, income_raw_b = self.read_income(
+                        expected_max=income_max_a
+                    )
+                else:
+                    income_b, income_max_b = None, None
+
+                income_ok = (
+                    income_a is not None and income_b is not None
+                    and income_max_a is not None and income_max_b == income_max_a
+                    and income_b >= income_a
+                )
+                if income_ok:
+                    scan["income"] = income_b
+                    scan["income_max"] = income_max_b
+
+            if energy_ok and income_ok:
+                self.last_scan_error = ""
+                self.log(
+                    f"Скан подтверждён ({reason}): энергия "
+                    f"{scan['energy']}/{scan['energy_max']}"
+                    + (
+                        f", доход {scan['income']}/{scan['income_max']}."
+                        if include_income else "."
+                    )
+                )
+                return scan
+
+            parts = []
+            if not energy_ok:
+                parts.append(
+                    f"энергия не совпала: {energy_a}/{energy_max_a} → "
+                    f"{energy_b}/{energy_max_b} ({energy_raw_a!r}; {energy_raw_b!r})"
+                )
+            if include_income and not income_ok:
+                parts.append(
+                    f"доход не подтверждён: {income_a}/{income_max_a} → "
+                    f"{income_b}/{income_max_b} ({income_raw_a!r}; {income_raw_b!r})"
+                )
+            self.last_scan_error = "; ".join(parts) or "счётчики не подтверждены"
+            self.log(
+                f"Повторный скан ({attempt}/{attempts}, {reason}): "
+                f"{self.last_scan_error}"
+            )
+            if attempt < attempts and not self.stop_event.is_set():
+                time.sleep(0.35)
+
+        return None
+
+    def scan_state_manual(self):
+        if self.worker_thread and self.worker_thread.is_alive():
+            self.log("Ручной скан пропущен: автоматизация сама проверяет счётчики при старте, паузе и смене цикла.")
+            return
+
+        def run_scan():
+            try:
+                self.set_status("СКАНИРОВАНИЕ", "Проверяю энергию и доход по двум независимым снимкам")
+                result = self._scan_game_state(
+                    include_income=True, reason="ручная проверка"
+                )
+                if result is None:
+                    self.set_status(
+                        "ОШИБКА СИНХРОНИЗАЦИИ",
+                        self.last_scan_error or "Счётчики не удалось подтвердить",
+                    )
+                    return
+                self.set_status("СКАНИРОВАНИЕ ЗАВЕРШЕНО", "Энергия и доход подтверждены")
+            except Exception as exc:
+                self.log(f"Ошибка сканирования состояния: {type(exc).__name__}: {exc}")
+                self.set_status("ОШИБКА СКАНИРОВАНИЯ", str(exc))
+
+        threading.Thread(target=run_scan, daemon=True, name="HHT-State-Scan").start()
 
     # ----------------------------- AUTOMATION -------------------------------
     def _point(self, name):
@@ -1721,14 +1821,37 @@ class OwnerSelectionApp:
         _, screen_left, screen_top, _, _ = self._client_geometry()
         return screen_left + x, screen_top + y
 
-    def _wait(self, seconds: float) -> bool:
+    def _wait(self, seconds: float, resume_scan: str = "energy") -> bool:
         remaining = seconds
+        paused_during_wait = False
         while remaining > 0:
             if self.stop_event.is_set():
                 return False
             if self.pause_event.is_set():
+                paused_during_wait = True
                 time.sleep(0.1)
                 continue
+
+            if paused_during_wait and self.rescan_requested.is_set():
+                self.rescan_requested.clear()
+                self.set_status(
+                    "ПОВТОРНЫЙ СКАН",
+                    "После паузы проверяю состояние игры перед продолжением",
+                )
+                scan = self._scan_game_state(
+                    include_income=(resume_scan == "both"),
+                    reason="после снятия паузы",
+                )
+                if scan is None:
+                    self.worker_error = (
+                        "ОШИБКА СИНХРОНИЗАЦИИ",
+                        self.last_scan_error or "Не удалось подтвердить счётчики после паузы",
+                    )
+                    self.stop_event.set()
+                    return False
+                self.last_resume_scan = scan
+                paused_during_wait = False
+
             step = min(0.1, remaining)
             time.sleep(step)
             remaining -= step
@@ -1758,23 +1881,35 @@ class OwnerSelectionApp:
                         time.sleep(0.1)
                     continue
 
-                self.set_status("ПРОВЕРКА ЭНЕРГИИ", "Проверяю, хватит ли энергии на следующий полный цикл")
-                energy, energy_max, raw = self.read_energy()
-                if energy is None:
+                self.set_status(
+                    "ПРОВЕРКА ЭНЕРГИИ",
+                    "Считываю энергию дважды перед началом нового цикла",
+                )
+                energy_scan = self._scan_game_state(
+                    include_income=False, reason="перед новым циклом"
+                )
+                if energy_scan is None:
                     energy_ocr_failures += 1
-                    meta = self.last_ocr_meta
                     debug_path = self.last_ocr_debug_path
-                    self.log(f"Не удалось прочитать энергию ({raw!r}; {meta}). Попытка {energy_ocr_failures}/{MAX_ENERGY_OCR_FAILURES}.")
+                    self.log(
+                        f"Не удалось подтвердить энергию: {self.last_scan_error}. "
+                        f"Попытка {energy_ocr_failures}/{MAX_ENERGY_OCR_FAILURES}."
+                    )
                     if debug_path:
                         self.log(f"Снимок области OCR: {debug_path}")
                     if energy_ocr_failures >= MAX_ENERGY_OCR_FAILURES:
-                        self.set_status("ОШИБКА OCR ЭНЕРГИИ", "Не удалось определить запас энергии. Проверь debug_energy_capture.png.")
-                        self.log("Автоматизация остановлена без кликов: значение энергии не подтверждено.")
+                        self.set_status(
+                            "ОШИБКА OCR ЭНЕРГИИ",
+                            "Энергия не подтверждена двумя снимками. Новых кликов не будет.",
+                        )
+                        self.log("Автоматизация остановлена без кликов: энергия не подтверждена.")
                         return
-                    if not self._wait(ENERGY_RETRY_INTERVAL):
+                    if not self._wait(ENERGY_RETRY_INTERVAL, resume_scan="energy"):
                         break
                     continue
 
+                energy = energy_scan["energy"]
+                energy_max = energy_scan["energy_max"]
                 energy_ocr_failures = 0
                 self.log(f"Запас энергии перед циклом: {energy}/{energy_max}.")
                 if energy < MINIMUM_ENERGY_PER_CYCLE or energy <= 0:
@@ -1784,16 +1919,48 @@ class OwnerSelectionApp:
 
                 self.set_status("ОТКРЫВАЮ МАГАЗИН", "Открываю магазин события")
                 self._click("Магазин")
-                if not self._wait(2.0):
+                if not self._wait(2.0, resume_scan="both"):
                     break
 
-                self.set_status("ФАРМ ДОХОДА", "Определяю целевой доход по уровню")
-                self.log("Магазин открыт. Начинаю нажимать молоток.")
-                last_ocr = 0.0
+                self.set_status(
+                    "СИНХРОНИЗАЦИЯ СЧЁТЧИКОВ",
+                    "Перед молотком проверяю энергию и целевой доход двумя снимками",
+                )
+                opening_scan = self.last_resume_scan
+                self.last_resume_scan = None
+                if opening_scan is None or opening_scan.get("income") is None:
+                    opening_scan = self._scan_game_state(
+                        include_income=True, reason="после открытия магазина"
+                    )
+                self.rescan_requested.clear()
+                if opening_scan is None:
+                    self.worker_error = (
+                        "ОШИБКА СИНХРОНИЗАЦИИ",
+                        self.last_scan_error or "Не удалось подтвердить доход и энергию",
+                    )
+                    self.set_status(*self.worker_error)
+                    self.log("Молоток не нажимаю: начальные значения не подтверждены.")
+                    return
+
+                # Use the paired scan as the baseline. If the threshold is
+                # already reached, proceed to the reward screen without more clicks.
+                active_income_target = opening_scan["income_max"]
+                current_at_open = opening_scan["income"]
+                self.set_metric("income", f"{current_at_open:,} / {active_income_target:,}")
+                self.log(
+                    f"Начальные показатели подтверждены: энергия "
+                    f"{opening_scan['energy']}/{opening_scan['energy_max']}, "
+                    f"доход {current_at_open}/{active_income_target}."
+                )
+                last_ocr = time.monotonic()
                 last_seen = time.monotonic()
-                reached = False
-                reached_confirmations = 0
-                active_income_target = None
+                reached = current_at_open >= active_income_target
+                reached_confirmations = 2 if reached else 0
+                if reached:
+                    self.log("Целевой доход уже достигнут. Дополнительные клики не нужны.")
+                self.set_status("ФАРМ ДОХОДА", f"Набираю доход до {active_income_target}")
+                if not reached:
+                    self.log("Магазин открыт. Начинаю нажимать молоток.")
                 income_thread = None
                 income_result = None
 
@@ -1807,9 +1974,50 @@ class OwnerSelectionApp:
                         output["elapsed_ms"] = (time.perf_counter() - started) * 1000
 
                 while not self.stop_event.is_set():
+                    was_paused = self.pause_event.is_set()
                     while self.pause_event.is_set() and not self.stop_event.is_set():
                         self.set_status("ПАУЗА", "Фарм приостановлен. F6 продолжит текущий цикл.")
                         time.sleep(0.1)
+                    if self.stop_event.is_set():
+                        break
+
+                    if was_paused and self.rescan_requested.is_set():
+                        # Wait for any previous background OCR to finish before
+                        # taking a fresh pair of screenshots after resume.
+                        if income_thread is not None and income_thread.is_alive():
+                            while income_thread.is_alive() and not self.stop_event.is_set():
+                                income_thread.join(timeout=0.1)
+                        if self.stop_event.is_set():
+                            break
+                        self.rescan_requested.clear()
+                        self.last_resume_scan = None
+                        self.set_status(
+                            "ПОВТОРНЫЙ СКАН",
+                            "После паузы проверяю доход и энергию до продолжения",
+                        )
+                        resume_scan_result = self._scan_game_state(
+                            include_income=True, reason="после паузы во время фарма"
+                        )
+                        if resume_scan_result is None:
+                            self.worker_error = (
+                                "ОШИБКА СИНХРОНИЗАЦИИ",
+                                self.last_scan_error or "Не удалось повторно прочитать счётчики",
+                            )
+                            self.set_status(*self.worker_error)
+                            self.stop_event.set()
+                            return
+                        self.last_resume_scan = resume_scan_result
+                        active_income_target = resume_scan_result["income_max"]
+                        last_seen = time.monotonic()
+                        last_ocr = last_seen
+                        if resume_scan_result["income"] >= active_income_target:
+                            reached = True
+                            self.log(
+                                f"После паузы цель уже достигнута: "
+                                f"{resume_scan_result['income']}/{active_income_target}."
+                            )
+                            break
+
                     if self.stop_event.is_set():
                         break
 
@@ -1878,7 +2086,20 @@ class OwnerSelectionApp:
                             self.set_status("ОШИБКА РАСПОЗНАВАНИЯ", "Значение дохода не читается. Проверь debug_income_capture.png.")
                             return
 
-                    if not self._wait(CLICK_INTERVAL):
+                    if not self._wait(CLICK_INTERVAL, resume_scan="both"):
+                        break
+                    resume_scan_result = self.last_resume_scan
+                    self.last_resume_scan = None
+                    if (
+                        resume_scan_result is not None
+                        and resume_scan_result.get("income") is not None
+                        and resume_scan_result["income"] >= resume_scan_result["income_max"]
+                    ):
+                        reached = True
+                        self.log(
+                            f"После возобновления подтверждена цель: "
+                            f"{resume_scan_result['income']}/{resume_scan_result['income_max']}."
+                        )
                         break
 
                 if self.stop_event.is_set() or not reached:
@@ -1887,19 +2108,21 @@ class OwnerSelectionApp:
                 self.set_status("ЗАВЕРШАЮ ИСПЫТАНИЕ", "Нажимаю Esc и ожидаю экран награды")
                 self._bring_game_to_front()
                 pyautogui.press("esc")
-                if not self._wait(2.0):
+                if not self._wait(2.0, resume_scan="energy"):
                     break
 
                 self.set_status("ПОЛУЧАЮ НАГРАДУ", "Забираю награду за испытание")
                 self._click("Получить")
-                if not self._wait(3.0):
+                if not self._wait(3.0, resume_scan="energy"):
                     break
 
                 self.cycle_count += 1
                 self.set_metric("cycles", str(self.cycle_count))
                 self.log(f"Цикл №{self.cycle_count} завершён.")
 
-            if self.stop_event.is_set():
+            if self.worker_error is not None:
+                self.set_status(*self.worker_error)
+            elif self.stop_event.is_set():
                 self.set_status("ОСТАНОВЛЕНО", "Автоматизация остановлена пользователем")
             else:
                 self.set_status("ЗАВЕРШЕНО", "Работа завершена")
