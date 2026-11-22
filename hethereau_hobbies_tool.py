@@ -970,11 +970,12 @@ class OwnerSelectionApp:
         self.log_text.pack(fill="both", expand=True, padx=10, pady=10)
         for stamp, entry in self.log_history:
             self.log_text.insert("end", f"{stamp}  ·  {self.tr(entry)}\n")
-        self.log_text.configure(state="disabled")
+        # Tk's disabled state can prevent partial selection/copy on Windows.
+        # Keep it normal and intercept editing keys in _guard_log_text_key.
+        self.log_text.configure(state="normal")
         self.log_text.see("end")
         text_widget = getattr(self.log_text, "_textbox", self.log_text)
-        text_widget.bind("<Control-c>", self._on_log_copy_shortcut)
-        text_widget.bind("<Control-C>", self._on_log_copy_shortcut)
+        text_widget.bind("<KeyPress>", self._guard_log_text_key)
         text_widget.bind("<Button-3>", self._show_log_context_menu)
         self.log_context_menu = tk.Menu(self.root, tearoff=0,
             background=PANEL, foreground=TEXT,
@@ -992,8 +993,32 @@ class OwnerSelectionApp:
             except Exception:
                 pass
 
-    def _on_log_copy_shortcut(self, _event=None):
-        self.copy_selected_logs()
+    def _guard_log_text_key(self, event):
+        """Keep the log view read-only without disabling text selection."""
+        key = str(event.keysym).lower()
+        control_pressed = bool(event.state & 0x4)
+
+        if control_pressed and key == "c":
+            self.copy_selected_logs()
+            return "break"
+        if control_pressed and key == "a":
+            widget = getattr(self.log_text, "_textbox", self.log_text)
+            widget.tag_add("sel", "1.0", "end-1c")
+            widget.mark_set("insert", "end-1c")
+            return "break"
+        if control_pressed and key == "insert":
+            self.copy_selected_logs()
+            return "break"
+
+        if key in {
+            "left", "right", "up", "down", "home", "end",
+            "prior", "next", "page_up", "page_down",
+            "shift_l", "shift_r", "control_l", "control_r",
+            "alt_l", "alt_r", "caps_lock",
+        }:
+            return None
+
+        # Block typing, paste, cut, deletion and all other text modifications.
         return "break"
 
     def _show_log_context_menu(self, event):
@@ -1008,23 +1033,44 @@ class OwnerSelectionApp:
     def log(self, message: str):
         stamp = datetime.now().strftime("%H:%M:%S")
         self.log_history.append((stamp, message))
-        self.log_history = self.log_history[-1000:]
+        dropped_oldest = len(self.log_history) > 1000
+        if dropped_oldest:
+            self.log_history.pop(0)
+
         def write():
-            if self.closed or self.log_text is None: return
+            if self.closed or self.log_text is None:
+                return
             try:
-                if not self.log_text.winfo_exists(): return
-                self.log_text.configure(state="normal")
-                self.log_text.insert("end", f"{stamp}  ·  {self.tr(message)}\n")
-                line_count = int(self.log_text.index("end-1c").split(".")[0])
-                if line_count > len(self.log_history):
-                    self.log_text.delete("1.0", f"{line_count-len(self.log_history)+1}.0")
-                self.log_text.see("end")
-                self.log_text.configure(state="disabled")
+                if not self.log_text.winfo_exists():
+                    return
+
+                text_widget = getattr(self.log_text, "_textbox", self.log_text)
+                try:
+                    was_at_bottom = float(text_widget.yview()[1]) >= 0.985
+                except Exception:
+                    was_at_bottom = True
+
+                if dropped_oldest:
+                    # Rebuild only when the bounded history drops its oldest record.
+                    self.log_text.delete("1.0", "end")
+                    for old_stamp, old_entry in self.log_history:
+                        self.log_text.insert(
+                            "end", f"{old_stamp}  ·  {self.tr(old_entry)}\n"
+                        )
+                else:
+                    self.log_text.insert("end", f"{stamp}  ·  {self.tr(message)}\n")
+
+                # Preserve the user's scroll position and current text selection.
+                if was_at_bottom:
+                    self.log_text.see("end")
                 self._update_logs_count()
             except Exception:
                 pass
-        if threading.current_thread() is threading.main_thread(): write()
-        else: self.root.after(0, write)
+
+        if threading.current_thread() is threading.main_thread():
+            write()
+        else:
+            self.root.after(0, write)
 
     def _copy_text_to_clipboard(self, content: str) -> bool:
         try:
@@ -1037,11 +1083,16 @@ class OwnerSelectionApp:
             return False
 
     def copy_selected_logs(self):
-        if self.log_text is None: return
+        if self.log_text is None:
+            return
+
+        text_widget = getattr(self.log_text, "_textbox", self.log_text)
         try:
-            selected = self.log_text.get("sel.first", "sel.last")
-        except tk.TclError:
+            selection = text_widget.tag_ranges("sel")
+            selected = text_widget.get(selection[0], selection[1]) if len(selection) >= 2 else ""
+        except (tk.TclError, AttributeError):
             selected = ""
+
         if not selected:
             self.log("Сначала выдели нужную часть журнала мышью.")
             return
@@ -1049,15 +1100,16 @@ class OwnerSelectionApp:
             self.log("Выделенный фрагмент журнала скопирован.")
 
     def copy_logs(self):
-        content = "\n".join(f"{stamp}  ·  {self.tr(entry)}" for stamp, entry in self.log_history)
-        if self._copy_text_to_clipboard(content): self.log("Весь журнал скопирован.")
+        content = "\n".join(
+            f"{stamp}  ·  {self.tr(entry)}" for stamp, entry in self.log_history
+        )
+        if self._copy_text_to_clipboard(content):
+            self.log("Весь журнал скопирован.")
 
     def clear_logs(self):
         self.log_history.clear()
         if self.log_text is not None:
-            self.log_text.configure(state="normal")
             self.log_text.delete("1.0", "end")
-            self.log_text.configure(state="disabled")
         self._update_logs_count()
 
     def set_status(self, status: str, stage: str | None = None):
