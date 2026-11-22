@@ -408,6 +408,7 @@ class OwnerSelectionApp:
         self.last_ocr_meta = ""
         self.last_ocr_debug_path = ""
         self.current_page = "owner"
+        self.game_screen_context = "outside_event"
         self.rescan_requested = threading.Event()
         self.pause_scan_requested = threading.Event()
         self.last_pause_scan: dict | None = None
@@ -1263,7 +1264,8 @@ class OwnerSelectionApp:
         previous_status = self.current_status
         previous_stage = self.current_stage
         include_income = (
-            "ФАРМ" in previous_status
+            self.game_screen_context == "owner_selection"
+            or "ФАРМ" in previous_status
             or any(token in previous_stage.lower() for token in ("доход", "фарм", "накоплен"))
         )
 
@@ -2166,6 +2168,7 @@ class OwnerSelectionApp:
                 if not self._click("Магазин"):
                     if self.worker_error is not None or self.stop_event.is_set():
                         break
+                self.game_screen_context = "owner_selection"
                 if not self._wait(2.0, resume_scan="both"):
                     break
 
@@ -2372,14 +2375,17 @@ class OwnerSelectionApp:
                 self.set_status("ЗАВЕРШАЮ ИСПЫТАНИЕ", "Нажимаю Esc и ожидаю экран награды")
                 self._bring_game_to_front()
                 pyautogui.press("esc")
+                self.game_screen_context = "reward_screen"
                 if not self._wait(2.0, resume_scan="energy"):
                     break
 
                 self.set_status("ПОЛУЧАЮ НАГРАДУ", "Забираю награду за испытание")
                 self._click("Получить")
+                self.game_screen_context = "event_result"
                 if not self._wait(3.0, resume_scan="energy"):
                     break
 
+                self.game_screen_context = "outside_event"
                 self.cycle_count += 1
                 self.set_metric("cycles", str(self.cycle_count))
                 self.log(f"Цикл №{self.cycle_count} завершён.")
