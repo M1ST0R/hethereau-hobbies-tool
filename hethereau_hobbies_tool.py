@@ -2232,7 +2232,15 @@ class OwnerSelectionApp:
                 self.stop_event.set()
                 return False
 
-        pyautogui.click(*self._point(name))
+        # Re-acquire the game focus immediately before sending the click. The
+        # OCR scan may take several seconds and focus can change meanwhile.
+        hwnd = self._bring_game_to_front()
+        x, y = self._point(name)
+        self.log(
+            f"Отправляю клик «{name}»: HWND={hwnd}, экранные координаты ({x}, {y})."
+        )
+        pyautogui.click(x, y)
+        self.log(f"Команда клика «{name}» отправлена.")
         return not self.stop_event.is_set()
 
     def _worker(self):
