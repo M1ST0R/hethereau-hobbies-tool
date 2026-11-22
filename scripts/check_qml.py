@@ -24,6 +24,7 @@ class BackendStub(QObject):
     logAdded = Signal(str)
     logsReset = Signal()
     runStateChanged = Signal()
+    hotkeysChanged = Signal()
 
     @Property(str, notify=statusChanged)
     def status(self): return "READY"
@@ -57,6 +58,15 @@ class BackendStub(QObject):
 
     @Property(str, notify=themeChanged)
     def theme(self): return "dark"
+
+    @Property(str, notify=hotkeysChanged)
+    def toggleHotkey(self): return "F6"
+
+    @Property(str, notify=hotkeysChanged)
+    def stopHotkey(self): return "F7"
+
+    @Property(list, constant=True)
+    def hotkeyOptions(self): return [f"F{i}" for i in range(1, 13)]
 
     @Property(str, constant=True)
     def version(self): return "0.3.0-dev.test"
@@ -93,6 +103,9 @@ class BackendStub(QObject):
 
     @Slot(str)
     def setTheme(self, _theme): pass
+
+    @Slot(str, str)
+    def setHotkeys(self, _toggle, _stop): pass
 
     @Slot(str)
     def openUrl(self, _url): pass
