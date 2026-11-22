@@ -1865,11 +1865,45 @@ class OwnerSelectionApp:
         return not self.stop_event.is_set()
 
     def _click(self, name):
-        """Click in the already-focused game window without a costly focus round-trip."""
+        """Do not send input after a pause until the visible game state is checked."""
+        was_paused = False
         while self.pause_event.is_set() and not self.stop_event.is_set():
+            was_paused = True
             time.sleep(0.05)
         if self.stop_event.is_set():
             return False
+
+        if was_paused or self.rescan_requested.is_set():
+            # Hammer clicks are handled by the worker loop, which can first join
+            # its background income OCR thread. Other buttons need an energy
+            # refresh before a single click is allowed.
+            if name == "Молоток":
+                self.rescan_requested.set()
+                return False
+
+            self.rescan_requested.clear()
+            scan = self._scan_game_state(
+                include_income=False,
+                reason=f"перед кликом «{name}» после паузы",
+            )
+            if scan is None:
+                self.worker_error = (
+                    "ОШИБКА СИНХРОНИЗАЦИИ",
+                    self.last_scan_error or "Не удалось подтвердить энергию перед кликом",
+                )
+                self.set_status(*self.worker_error)
+                self.stop_event.set()
+                return False
+
+            if name == "Магазин" and scan["energy"] < MINIMUM_ENERGY_PER_CYCLE:
+                self.worker_error = (
+                    "ЭНЕРГИЯ ЗАКОНЧИЛАСЬ",
+                    f"Осталось {scan['energy']}. Магазин не открываю.",
+                )
+                self.set_status(*self.worker_error)
+                self.stop_event.set()
+                return False
+
         pyautogui.click(*self._point(name))
         return not self.stop_event.is_set()
 
@@ -1896,6 +1930,8 @@ class OwnerSelectionApp:
                     include_income=False, reason="перед новым циклом"
                 )
                 if energy_scan is None:
+                    if self.stop_event.is_set():
+                        break
                     energy_ocr_failures += 1
                     debug_path = self.last_ocr_debug_path
                     self.log(
@@ -1925,7 +1961,9 @@ class OwnerSelectionApp:
                     return
 
                 self.set_status("ОТКРЫВАЮ МАГАЗИН", "Открываю магазин события")
-                self._click("Магазин")
+                if not self._click("Магазин"):
+                    if self.worker_error is not None or self.stop_event.is_set():
+                        break
                 if not self._wait(2.0, resume_scan="both"):
                     break
 
@@ -2031,7 +2069,13 @@ class OwnerSelectionApp:
 
                     # Keep the hammer loop independent from Tesseract. OCR works
                     # on its own captured frame while clicks continue at a steady rate.
-                    self._click("Молоток")
+                    clicked = self._click("Молоток")
+                    if not clicked:
+                        if self.stop_event.is_set():
+                            break
+                        if self.rescan_requested.is_set():
+                            continue
+                        break
                     now = time.monotonic()
 
                     if (
