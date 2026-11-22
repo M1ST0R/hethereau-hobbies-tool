@@ -37,6 +37,9 @@ class HHTBackend(QObject):
     logsReset = Signal()
     hotkeyRequested = Signal(str)
     runStateChanged = Signal()
+    hotkeysChanged = Signal()
+
+    HOTKEY_OPTIONS = tuple(f"F{number}" for number in range(1, 13))
 
     def __init__(self) -> None:
         super().__init__()
@@ -47,6 +50,13 @@ class HHTBackend(QObject):
         # all Tk/CustomTkinter widgets and the old UI event loop.
         core.language = core._load_language()
         core.theme_mode = core._load_theme()
+        preferences = core._read_preferences()
+        core.toggle_hotkey = preferences.get("toggle_hotkey", "F6")
+        core.stop_hotkey = preferences.get("stop_hotkey", "F7")
+        if core.toggle_hotkey not in self.HOTKEY_OPTIONS:
+            core.toggle_hotkey = "F6"
+        if core.stop_hotkey not in self.HOTKEY_OPTIONS or core.stop_hotkey == core.toggle_hotkey:
+            core.stop_hotkey = "F7" if core.toggle_hotkey != "F7" else "F8"
         core.ui_metrics = {"cycles": "0", "energy": "—", "income": "—"}
         core.current_status = "ГОТОВ К РАБОТЕ"
         core.current_stage = "Ожидание запуска"
@@ -57,6 +67,7 @@ class HHTBackend(QObject):
         core.cycle_count = 0
         core.last_ocr_meta = ""
         core.last_ocr_debug_path = ""
+        core.last_ocr_debug_paths = {}
         core.current_page = "owner"
         core.game_screen_context = "outside_event"
         core.stop_event = threading.Event()
@@ -93,6 +104,8 @@ class HHTBackend(QObject):
         self._game_connected = False
         self._language = core.language
         self._theme = core.theme_mode
+        self._toggle_hotkey = core.toggle_hotkey
+        self._stop_hotkey = core.stop_hotkey
 
         configure_tesseract()
         core.refresh_game_window(silent=True)
@@ -146,6 +159,18 @@ class HHTBackend(QObject):
     @Property(str, notify=themeChanged)
     def theme(self) -> str:
         return self._theme
+
+    @Property(str, notify=hotkeysChanged)
+    def toggleHotkey(self) -> str:
+        return self._toggle_hotkey
+
+    @Property(str, notify=hotkeysChanged)
+    def stopHotkey(self) -> str:
+        return self._stop_hotkey
+
+    @Property("QStringList", constant=True)
+    def hotkeyOptions(self) -> list[str]:
+        return list(self.HOTKEY_OPTIONS)
 
     @Property(str, constant=True)
     def version(self) -> str:
@@ -262,6 +287,31 @@ class HHTBackend(QObject):
         self.logsReset.emit()
         self.logsChanged.emit()
 
+    @Slot(str, str)
+    def setHotkeys(self, toggle_hotkey: str, stop_hotkey: str) -> None:
+        toggle_hotkey = str(toggle_hotkey).upper()
+        stop_hotkey = str(stop_hotkey).upper()
+
+        if toggle_hotkey not in self.HOTKEY_OPTIONS or stop_hotkey not in self.HOTKEY_OPTIONS:
+            self.log("Выбери клавиши F1–F12.")
+            self.hotkeysChanged.emit()
+            return
+        if toggle_hotkey == stop_hotkey:
+            self.log("Клавиши запуска и остановки должны отличаться.")
+            self.hotkeysChanged.emit()
+            return
+        if (toggle_hotkey, stop_hotkey) == (self._toggle_hotkey, self._stop_hotkey):
+            return
+
+        self._toggle_hotkey = toggle_hotkey
+        self._stop_hotkey = stop_hotkey
+        self.core.toggle_hotkey = toggle_hotkey
+        self.core.stop_hotkey = stop_hotkey
+        self.core._save_preferences()
+        self._start_hotkeys()
+        self.hotkeysChanged.emit()
+        self.log(f"Горячие клавиши обновлены: {toggle_hotkey} / {stop_hotkey}.")
+
     @Slot(str)
     def setTheme(self, theme: str) -> None:
         if theme not in ("dark", "light") or theme == self._theme:
@@ -278,15 +328,30 @@ class HHTBackend(QObject):
         QDesktopServices.openUrl(QUrl(url))
 
     def _start_hotkeys(self) -> None:
+        previous_listener = self.core.hotkey_listener
+        if previous_listener is not None:
+            try:
+                previous_listener.stop()
+                previous_listener.join(timeout=0.25)
+            except Exception:
+                pass
+            self.core.hotkey_listener = None
+
         if keyboard is None:
-            self.log("Глобальные хоткеи недоступны. Используй кнопки приложения.")
+            self.log("Глобальные клавиши недоступны; используй кнопки приложения.")
+            return
+
+        toggle_key = getattr(keyboard.Key, self._toggle_hotkey.lower(), None)
+        stop_key = getattr(keyboard.Key, self._stop_hotkey.lower(), None)
+        if toggle_key is None or stop_key is None:
+            self.log("Не удалось применить выбранные горячие клавиши.")
             return
 
         def on_press(key):
             now = time.monotonic()
-            if key == keyboard.Key.f6:
+            if key == toggle_key:
                 name = "toggle"
-            elif key == keyboard.Key.f7:
+            elif key == stop_key:
                 name = "stop"
             else:
                 return
@@ -295,16 +360,17 @@ class HHTBackend(QObject):
                 if now - self.core.last_hotkey_time.get(name, 0) < 0.45:
                     return
                 self.core.last_hotkey_time[name] = now
+
             if not self.core.closed:
                 self.hotkeyRequested.emit(name)
 
         try:
-            self.core.hotkey_listener = keyboard.Listener(on_press=on_press)
-            self.core.hotkey_listener.daemon = True
-            self.core.hotkey_listener.start()
-            self.log("Глобальные F6 / F7 активны.")
+            listener = keyboard.Listener(on_press=on_press)
+            listener.daemon = True
+            listener.start()
+            self.core.hotkey_listener = listener
         except Exception as exc:
-            self.log(f"Не удалось включить глобальные хоткеи: {exc}")
+            self.log(f"Не удалось включить глобальные горячие клавиши: {exc}")
 
     @Slot(str)
     def _handle_hotkey(self, action: str) -> None:
