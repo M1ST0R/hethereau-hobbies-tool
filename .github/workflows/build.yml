@@ -57,7 +57,7 @@ jobs:
         run: |
           $tesseractDir = "$env:ProgramFiles\Tesseract-OCR"
           if (!(Test-Path "$tesseractDir\tesseract.exe")) { throw "Tesseract was not found at $tesseractDir" }
-          pyinstaller --noconfirm --clean --onefile --windowed --name "Hethereau-HOST" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "$tesseractDir;tesseract" etero_owner_selection.py
+          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --icon "assets/host.ico" --name "Hethereau-HOST" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" etero_owner_selection.py
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item "dist\Hethereau-HOST.exe" "release\Hethereau-HOST-Windows-x64.exe"
 
@@ -66,14 +66,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          pyinstaller --noconfirm --clean --onedir --name HOST --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --hidden-import pynput.keyboard._xorg etero_owner_selection.py
+          pyinstaller --noconfirm --clean --onedir --icon "assets/host.png" --add-data "assets:assets" --name HOST --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --hidden-import pynput.keyboard._xorg etero_owner_selection.py
 
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ "$VERSION" == "$GITHUB_REF_NAME" ]]; then VERSION="0.0.0+${GITHUB_SHA:0:7}"; fi
 
           mkdir -p release
           PACKAGE_ROOT="$RUNNER_TEMP/host-deb"
-          install -d "$PACKAGE_ROOT/opt/hethereau-host" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/DEBIAN"
+          install -d "$PACKAGE_ROOT/opt/hethereau-host" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/usr/share/icons/hicolor/96x96/apps" "$PACKAGE_ROOT/DEBIAN"
           cp -a dist/HOST/. "$PACKAGE_ROOT/opt/hethereau-host/"
 
           cat > "$PACKAGE_ROOT/usr/bin/hethereau-host" <<'LAUNCHER'
@@ -82,12 +82,14 @@ jobs:
           LAUNCHER
           chmod 755 "$PACKAGE_ROOT/usr/bin/hethereau-host"
 
+          cp assets/host.png "$PACKAGE_ROOT/usr/share/icons/hicolor/96x96/apps/hethereau-host.png"
           cat > "$PACKAGE_ROOT/usr/share/applications/hethereau-host.desktop" <<'DESKTOP'
           [Desktop Entry]
           Type=Application
           Name=Hethereau Owner's Selection Tool (HOST)
           Comment=Owner's Selection game event automation
           Exec=hethereau-host
+          Icon=hethereau-host
           Terminal=false
           Categories=Game;Utility;
           DESKTOP

@@ -14,7 +14,7 @@ from datetime import datetime
 import customtkinter as ctk
 import pyautogui
 import pytesseract
-from PIL import Image, ImageOps, ImageGrab
+from PIL import Image, ImageOps, ImageGrab, ImageTk
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -107,6 +107,9 @@ EN_TRANSLATIONS = {
     "ПОДБОРКА ВЛАДЕЛЬЦА": "OWNER'S SELECTION",
     "Автоматизация игрового события": "Game event automation",
     "↻  Обновить окно": "↻  Refresh game window",
+    "Обновить окно": "Refresh game window",
+    "Запустить / Пауза · F6": "Start / Pause · F6",
+    "Стоп · F7": "Stop · F7",
     "ИГРОВОЕ ОКНО": "GAME WINDOW",
     "Поиск HTGame.exe…": "Searching for HTGame.exe…",
     "ТЕКУЩЕЕ СОСТОЯНИЕ": "CURRENT STATUS",
@@ -214,6 +217,77 @@ GREEN = "#24C78A"
 RED = "#F06475"
 YELLOW = "#F5C45E"
 
+
+def resource_path(relative_path: str) -> str:
+    """Return an asset path that works both from source and in a PyInstaller bundle."""
+    base_path = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base_path, relative_path)
+
+
+SYMBOL_POSITIONS = {
+    "language": (0, 0), "monitor": (1, 0), "check_circle": (2, 0), "repeat": (3, 0),
+    "bolt": (0, 1), "payments": (1, 1), "play_arrow": (2, 1), "pause": (3, 1),
+    "stop": (0, 2), "fact_check": (1, 2), "history": (2, 2), "keyboard": (3, 2),
+    "warning": (0, 3), "error": (1, 3), "info": (2, 3), "refresh": (3, 3),
+}
+
+# (light-mode tint, dark-mode tint); Material Symbols Rounded, one filled style.
+SYMBOL_COLORS = {
+    "normal": ("#21304B", "#E8EDFF"),
+    "muted": ("#62718C", "#98A6C3"),
+    "accent": ("#4266D5", "#A7B9FF"),
+    "success": ("#16865D", "#55DDAA"),
+    "warning": ("#A86B08", "#F4C66A"),
+    "danger": ("#BF4055", "#FF8798"),
+}
+
+
+def ensure_windows_admin() -> bool:
+    """Relaunch with UAC elevation on Windows; no elevation is needed on Linux."""
+    if os.name != "nt":
+        return True
+    try:
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            return True
+    except Exception:
+        pass
+
+    if getattr(sys, "frozen", False):
+        executable = sys.executable
+        parameters = subprocess.list2cmdline(sys.argv[1:])
+        working_directory = os.path.dirname(sys.executable)
+    else:
+        executable = sys.executable
+        script_path = os.path.abspath(sys.argv[0] if sys.argv else __file__)
+        parameters = subprocess.list2cmdline([script_path, *sys.argv[1:]])
+        working_directory = os.path.dirname(script_path)
+
+    try:
+        result = ctypes.windll.shell32.ShellExecuteW(
+            None, "runas", executable, parameters, working_directory, 1
+        )
+    except Exception as exc:
+        ctypes.windll.user32.MessageBoxW(
+            None,
+            f"{APP_TITLE} needs administrator privileges on Windows.\\n\\n{exc}",
+            APP_TITLE,
+            0x10,
+        )
+        return False
+
+    if result > 32:
+        # The elevated child process has been started; close this unelevated parent.
+        return False
+
+    ctypes.windll.user32.MessageBoxW(
+        None,
+        "Administrator privileges are required to send input to elevated applications.\\n"
+        "Approve the Windows UAC prompt and launch HOST again.",
+        APP_TITLE,
+        0x10,
+    )
+    return False
+
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.015
 
@@ -231,6 +305,10 @@ class OwnerSelectionApp:
         self.root.minsize(700, 710)
         self.root.configure(fg_color=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self._symbol_cache: dict[tuple[str, int, str], ctk.CTkImage] = {}
+        self._symbol_atlas = None
+        self._logo_pil = None
+        self._load_visual_assets()
 
         configure_tesseract()
 
@@ -253,6 +331,57 @@ class OwnerSelectionApp:
         self._start_hotkeys()
         self.log("Программа готова. F6 — старт / пауза, F7 — остановка.")
         self.log("Открой событие «Увлечения Этеро — Подборка владельца» перед запуском.")
+
+
+    def _load_visual_assets(self):
+        """Load the bundled HOST app icon and Material Symbols Rounded atlas."""
+        try:
+            self._logo_pil = Image.open(resource_path("assets/host.png")).convert("RGBA")
+            self._window_icon_photo = ImageTk.PhotoImage(self._logo_pil)
+            self.root.iconphoto(True, self._window_icon_photo)
+            if os.name == "nt":
+                self.root.iconbitmap(resource_path("assets/host.ico"))
+        except Exception as exc:
+            self._logo_pil = None
+            self.log_history.append((datetime.now().strftime("%H:%M:%S"), f"Не удалось загрузить иконку приложения: {exc}"))
+
+        try:
+            self._symbol_atlas = Image.open(
+                resource_path("assets/icons/material_symbols_rounded.png")
+            ).convert("RGBA")
+        except Exception as exc:
+            self._symbol_atlas = None
+            self.log_history.append((datetime.now().strftime("%H:%M:%S"), f"Не удалось загрузить Material Symbols: {exc}"))
+
+    def symbol_image(self, name: str, size: int = 20, tone: str = "normal"):
+        """Return a tinted Material Symbols Rounded icon for light and dark themes."""
+        cache_key = (name, size, tone)
+        if cache_key in self._symbol_cache:
+            return self._symbol_cache[cache_key]
+        if self._symbol_atlas is None or name not in SYMBOL_POSITIONS:
+            return None
+
+        col, row = SYMBOL_POSITIONS[name]
+        cell_size = 64
+        icon = self._symbol_atlas.crop((
+            col * cell_size, row * cell_size,
+            (col + 1) * cell_size, (row + 1) * cell_size,
+        ))
+        alpha = icon.getchannel("A")
+        light_color, dark_color = SYMBOL_COLORS.get(tone, SYMBOL_COLORS["normal"])
+
+        def tint(color: str) -> Image.Image:
+            result = Image.new("RGBA", icon.size, color)
+            result.putalpha(alpha)
+            return result
+
+        image = ctk.CTkImage(
+            light_image=tint(light_color),
+            dark_image=tint(dark_color),
+            size=(size, size),
+        )
+        self._symbol_cache[cache_key] = image
+        return image
 
     def _load_language(self) -> str:
         config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_config.json")
@@ -339,6 +468,13 @@ class OwnerSelectionApp:
         # Header
         header = ctk.CTkFrame(outer, fg_color="transparent")
         header.pack(fill="x", pady=(0, 16))
+        if self._logo_pil is not None:
+            self._header_logo = ctk.CTkImage(
+                light_image=self._logo_pil, dark_image=self._logo_pil, size=(52, 52)
+            )
+            ctk.CTkLabel(header, text="", image=self._header_logo).pack(
+                side="left", padx=(0, 13), anchor="center"
+            )
         title_box = ctk.CTkFrame(header, fg_color="transparent")
         title_box.pack(side="left", fill="x", expand=True)
         ctk.CTkLabel(
@@ -355,14 +491,18 @@ class OwnerSelectionApp:
         ).pack(anchor="w", pady=(1, 0))
 
         self.refresh_button = ctk.CTkButton(
-            header, text=self.tr("↻  Обновить окно"), width=142, height=36,
+            header, text=self.tr("Обновить окно"),
+            image=self.symbol_image("refresh", 17, "muted"), compound="left",
+            width=150, height=36,
             fg_color=PANEL_ALT, hover_color=BORDER, text_color=TEXT,
             font=ctk.CTkFont("Segoe UI", 11, "bold"),
             command=self.refresh_game_window,
         )
         self.refresh_button.pack(side="right", anchor="center")
         self.language_button = ctk.CTkButton(
-            header, text=("RU" if self.language == "en" else "EN"), width=52, height=36,
+            header, text=("RU" if self.language == "en" else "EN"),
+            image=self.symbol_image("language", 17, "muted"), compound="left",
+            width=62, height=36,
             fg_color=PANEL_ALT, hover_color=BORDER, text_color=TEXT,
             font=ctk.CTkFont("Segoe UI", 11, "bold"), command=self.toggle_language,
         )
@@ -385,11 +525,10 @@ class OwnerSelectionApp:
             font=ctk.CTkFont("Segoe UI", 12, "bold"), anchor="w",
         )
         self.window_status_label.pack(anchor="w", pady=(2, 0))
-        self.window_dot = ctk.CTkLabel(
-            connection, text="●", text_color=YELLOW,
-            font=ctk.CTkFont("Segoe UI", 18), width=24,
+        self.connection_icon = ctk.CTkLabel(
+            connection, text="", image=self.symbol_image("monitor", 23, "muted"), width=30,
         )
-        self.window_dot.pack(side="right", padx=14)
+        self.connection_icon.pack(side="right", padx=14)
 
         # Current state
         state_card = ctk.CTkFrame(
@@ -403,6 +542,10 @@ class OwnerSelectionApp:
             state_top, text=self.tr("ТЕКУЩЕЕ СОСТОЯНИЕ"), text_color=MUTED,
             font=ctk.CTkFont("Segoe UI", 10, "bold"),
         ).pack(side="left")
+        self.status_icon_label = ctk.CTkLabel(
+            state_top, text="", image=self.symbol_image("info", 19, "accent"), width=25,
+        )
+        self.status_icon_label.pack(side="left", padx=(10, 0))
         self.status_badge = ctk.CTkLabel(
             state_top, text=self.tr("ГОТОВ К РАБОТЕ"), text_color=TEXT,
             fg_color=PANEL_ALT, corner_radius=10,
@@ -419,21 +562,26 @@ class OwnerSelectionApp:
         metrics = ctk.CTkFrame(outer, fg_color="transparent")
         metrics.pack(fill="x", pady=(0, 14))
         metric_specs = [
-            (self.tr("ЦИКЛЫ"), self.ui_metrics["cycles"], self.tr("Завершено"), ACCENT),
-            (self.tr("ЭНЕРГИЯ"), self.ui_metrics["energy"], self.tr("Текущий запас"), GREEN),
-            (self.tr("ДОХОД"), self.ui_metrics["income"], self.tr("Автоопределение уровня"), YELLOW),
+            (self.tr("ЦИКЛЫ"), self.ui_metrics["cycles"], self.tr("Завершено"), ACCENT, "repeat", "accent"),
+            (self.tr("ЭНЕРГИЯ"), self.ui_metrics["energy"], self.tr("Текущий запас"), GREEN, "bolt", "success"),
+            (self.tr("ДОХОД"), self.ui_metrics["income"], self.tr("Автоопределение уровня"), YELLOW, "payments", "warning"),
         ]
-        for index, (name, initial, subtitle, accent) in enumerate(metric_specs):
+        for index, (name, initial, subtitle, accent, icon_name, icon_tone) in enumerate(metric_specs):
             card = ctk.CTkFrame(
                 metrics, fg_color=PANEL, corner_radius=15,
                 border_width=1, border_color=BORDER,
             )
             card.grid(row=0, column=index, sticky="nsew", padx=(0 if index == 0 else 7, 0))
             metrics.grid_columnconfigure(index, weight=1, uniform="metric")
+            metric_header = ctk.CTkFrame(card, fg_color="transparent")
+            metric_header.pack(fill="x", padx=13, pady=(12, 1))
             ctk.CTkLabel(
-                card, text=name, text_color=MUTED,
+                metric_header, text=name, text_color=MUTED,
                 font=ctk.CTkFont("Segoe UI", 9, "bold"),
-            ).pack(anchor="w", padx=13, pady=(12, 1))
+            ).pack(side="left")
+            ctk.CTkLabel(
+                metric_header, text="", image=self.symbol_image(icon_name, 19, icon_tone),
+            ).pack(side="right")
             value = ctk.CTkLabel(
                 card, text=initial, text_color=accent,
                 font=ctk.CTkFont("Segoe UI", 22, "bold"),
@@ -450,14 +598,16 @@ class OwnerSelectionApp:
         controls = ctk.CTkFrame(outer, fg_color="transparent")
         controls.pack(fill="x", pady=(0, 12))
         self.toggle_button = ctk.CTkButton(
-            controls, text=self.tr("▶  Запустить / Пауза  ·  F6"), height=47,
+            controls, text=self.tr("Запустить / Пауза · F6"),
+            image=self.symbol_image("play_arrow", 22, "normal"), compound="left", height=47,
             fg_color=ACCENT, hover_color="#5676E8", text_color="#FFFFFF",
             font=ctk.CTkFont("Segoe UI", 13, "bold"), corner_radius=12,
             command=self.toggle_run_pause,
         )
         self.toggle_button.pack(side="left", fill="x", expand=True, padx=(0, 6))
         self.stop_button = ctk.CTkButton(
-            controls, text=self.tr("■  Стоп  ·  F7"), height=47, width=145,
+            controls, text=self.tr("Стоп · F7"),
+            image=self.symbol_image("stop", 19, "danger"), compound="left", height=47, width=145,
             fg_color="#39202B", hover_color="#542A39", text_color="#FFADB8",
             font=ctk.CTkFont("Segoe UI", 13, "bold"), corner_radius=12,
             command=self.stop,
@@ -465,7 +615,8 @@ class OwnerSelectionApp:
         self.stop_button.pack(side="left", padx=(6, 0))
 
         self.ocr_button = ctk.CTkButton(
-            outer, text=self.tr("Проверить распознавание"), height=34,
+            outer, text=self.tr("Проверить распознавание"),
+            image=self.symbol_image("fact_check", 18, "muted"), compound="left", height=34,
             fg_color="transparent", hover_color=PANEL_ALT,
             border_width=1, border_color=BORDER, text_color=MUTED,
             font=ctk.CTkFont("Segoe UI", 11),
@@ -478,6 +629,9 @@ class OwnerSelectionApp:
         hotkeys.pack(fill="x", pady=(0, 14))
         hotkey_row = ctk.CTkFrame(hotkeys, fg_color="transparent")
         hotkey_row.pack(fill="x", padx=13, pady=10)
+        ctk.CTkLabel(
+            hotkey_row, text="", image=self.symbol_image("keyboard", 20, "muted"),
+        ).pack(side="left", padx=(0, 10))
         ctk.CTkLabel(
             hotkey_row, text="F6", width=42, height=27, corner_radius=7,
             fg_color="#263A68", text_color="#DCE5FF",
@@ -500,6 +654,9 @@ class OwnerSelectionApp:
         # Log
         log_header = ctk.CTkFrame(outer, fg_color="transparent")
         log_header.pack(fill="x", pady=(0, 7))
+        ctk.CTkLabel(
+            log_header, text="", image=self.symbol_image("history", 19, "accent"),
+        ).pack(side="left", padx=(0, 7))
         ctk.CTkLabel(
             log_header, text=self.tr("ЖУРНАЛ"), text_color=TEXT,
             font=ctk.CTkFont("Segoe UI", 12, "bold"),
@@ -562,6 +719,17 @@ class OwnerSelectionApp:
             else:
                 color = TEXT
                 fg = PANEL_ALT
+            if "ПАУЗА" in status:
+                status_icon, icon_tone = "pause", "warning"
+            elif any(word in status for word in ("ОШИБКА", "ОСТАНОВЛЕНО", "ОСТАНОВКА", "АВАРИЙНАЯ")):
+                status_icon, icon_tone = "error", "danger"
+            elif "ЗАКОНЧИЛАСЬ" in status or "ЗАВЕРШЕНО" in status:
+                status_icon, icon_tone = "check_circle", "success"
+            elif any(word in status for word in ("РАБОТАЕТ", "ЗАПУСК", "ФАРМ", "ПОЛУЧАЮ", "ОТКРЫВАЮ", "ПРОВЕРКА", "ЗАВЕРШАЮ")):
+                status_icon, icon_tone = "repeat", "success"
+            else:
+                status_icon, icon_tone = "info", "accent"
+            self.status_icon_label.configure(image=self.symbol_image(status_icon, 19, icon_tone))
             self.status_badge.configure(text=self.tr(status), text_color=color, fg_color=fg)
             if stage is not None:
                 self.stage_label.configure(text=self.tr(stage))
@@ -584,7 +752,9 @@ class OwnerSelectionApp:
             if self.closed:
                 return
             self.window_status_label.configure(text=self.tr(text))
-            self.window_dot.configure(text_color=GREEN if found else RED)
+            self.connection_icon.configure(image=self.symbol_image(
+                "check_circle" if found else "monitor", 23, "success" if found else "danger"
+            ))
         if threading.current_thread() is threading.main_thread():
             update()
         else:
@@ -1318,6 +1488,8 @@ class OwnerSelectionApp:
 
 
 def main():
+    if not ensure_windows_admin():
+        return
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")
     root = ctk.CTk()

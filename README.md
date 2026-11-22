@@ -59,6 +59,8 @@ hethereau-host
 
 The package installs the required X11 utilities and Tesseract language data through package dependencies.
 
+On Windows, HOST always requests administrator privileges through UAC before starting. The packaged EXE carries a `requireAdministrator` manifest, and source runs elevate themselves. This is needed when HOST must send input to applications that run with elevated privileges. Review the UAC prompt before approving.
+
 **Linux limitations:**
 - X11 is required. Wayland-only sessions are not supported because global input hooks, window activation, and screen capture rely on X11.
 - The game must be visible and not covered by another window.
@@ -110,6 +112,10 @@ Attach these images to bug reports if OCR fails.
 
 GitHub Actions builds both platforms. To build manually, install the platform-specific dependencies and PyInstaller, then use the commands in .github/workflows/build.yml.
 
+## Icon attribution
+
+The UI symbols are adapted from **Material Symbols Rounded** by Google and are licensed under Apache License 2.0. The required license text is included in [LICENSE-MATERIAL-SYMBOLS.txt](LICENSE-MATERIAL-SYMBOLS.txt). The HOST launcher icon is an original project asset.
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+HOST source code: MIT. See [LICENSE](LICENSE).
