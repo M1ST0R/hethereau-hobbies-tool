@@ -2,7 +2,7 @@
 
 import unittest
 
-from hethereau_hobbies_tool import select_ratio_candidate
+from hht_ocr import select_ratio_candidate
 
 
 class SelectRatioCandidateTests(unittest.TestCase):
