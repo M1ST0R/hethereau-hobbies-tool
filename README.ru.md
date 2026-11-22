@@ -1,4 +1,4 @@
-# Hethereau Owner's Selection Tool
+# Hethereau Owner's Selection Tool (HOST)
 
 [English](README.md) | [Русский](README.ru.md)
 
