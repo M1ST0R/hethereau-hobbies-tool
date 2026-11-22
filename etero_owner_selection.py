@@ -6,6 +6,9 @@ import json
 import threading
 import ctypes
 import time
+import shutil
+import subprocess
+import sys
 from datetime import datetime
 
 import customtkinter as ctk
@@ -20,12 +23,27 @@ except Exception:
     pass
 
 try:
-    import win32gui
-    import win32process
-    import win32con
     import psutil
 except ImportError:
-    win32gui = win32process = win32con = psutil = None
+    psutil = None
+
+if os.name == "nt":
+    try:
+        import win32gui
+        import win32process
+        import win32con
+    except ImportError:
+        win32gui = win32process = win32con = None
+else:
+    win32gui = win32process = win32con = None
+
+if sys.platform.startswith("linux"):
+    try:
+        from Xlib import X, display as xdisplay
+    except ImportError:
+        X = xdisplay = None
+else:
+    X = xdisplay = None
 
 try:
     from pynput import keyboard
@@ -34,6 +52,7 @@ except Exception:
 
 
 # ---------------------------- FIXED SETTINGS -----------------------------
+APP_TITLE = "Hethereau Owner's Selection Tool (HOST)"
 TARGET_EXE = "HTGame.exe"
 REFERENCE_WIDTH = 1600
 REFERENCE_HEIGHT = 900
@@ -57,12 +76,33 @@ CLICK_INTERVAL = 0.08
 OCR_INTERVAL = 1.0
 ENERGY_RETRY_INTERVAL = 1.5
 MAX_ENERGY_OCR_FAILURES = 8
-TESSERACT_PATH = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+def configure_tesseract():
+    """Prefer the bundled OCR engine, then fall back to a system installation."""
+    bundle_root = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    executable = "tesseract.exe" if os.name == "nt" else "tesseract"
+    bundled_path = os.path.join(bundle_root, "tesseract", executable)
+    if os.path.isfile(bundled_path):
+        pytesseract.pytesseract.tesseract_cmd = bundled_path
+        bundled_tessdata = os.path.join(bundle_root, "tesseract", "tessdata")
+        if os.path.isdir(bundled_tessdata):
+            os.environ["TESSDATA_PREFIX"] = bundled_tessdata
+        return bundled_path
+
+    system_path = shutil.which("tesseract")
+    if system_path:
+        pytesseract.pytesseract.tesseract_cmd = system_path
+        return system_path
+
+    legacy_windows_path = "C:/Program Files/Tesseract-OCR/tesseract.exe"
+    if os.path.isfile(legacy_windows_path):
+        pytesseract.pytesseract.tesseract_cmd = legacy_windows_path
+        return legacy_windows_path
+    return None
 
 
 
 EN_TRANSLATIONS = {
-    "Увлечения Этеро — Подборка владельца": "Hethereau — Owner's Selection",
+    APP_TITLE: APP_TITLE,
     "УВЛЕЧЕНИЯ ЭТЕРО": "HETHEREAU",
     "ПОДБОРКА ВЛАДЕЛЬЦА": "OWNER'S SELECTION",
     "Автоматизация игрового события": "Game event automation",
@@ -186,14 +226,13 @@ class OwnerSelectionApp:
         self.current_status = "ГОТОВ К РАБОТЕ"
         self.current_stage = "Ожидание запуска"
         self.log_history: list[tuple[str, str]] = []
-        self.root.title(self.tr("Увлечения Этеро — Подборка владельца"))
+        self.root.title(self.tr(APP_TITLE))
         self.root.geometry("760x790")
         self.root.minsize(700, 710)
         self.root.configure(fg_color=BG)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
-        if os.path.isfile(TESSERACT_PATH):
-            pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+        configure_tesseract()
 
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
@@ -286,7 +325,7 @@ class OwnerSelectionApp:
             child.destroy()
         self.metric_labels = {}
         self._build_ui()
-        self.root.title(self.tr("Увлечения Этеро — Подборка владельца"))
+        self.root.title(self.tr(APP_TITLE))
         self.set_status(self.current_status, self.current_stage)
         for metric, value in self.ui_metrics.items():
             self.set_metric(metric, value)
@@ -623,39 +662,137 @@ class OwnerSelectionApp:
 
     # --------------------------- WINDOW BINDING -----------------------------
     def refresh_game_window(self, silent=False):
-        if win32gui is None or psutil is None or win32process is None:
+        if psutil is None:
             self.game_hwnd = None
-            self.set_window_status("Не установлены pywin32 / psutil", False)
+            self.set_window_status("Не установлен psutil", False)
             if not silent:
-                self.log("Не найдены компоненты для поиска HTGame.exe. Проверь requirements.txt.")
+                self.log("Не найден psutil. Проверь requirements.txt.")
             return None
 
         wanted = TARGET_EXE.lower()
         matches = []
 
-        def enum_callback(hwnd, _):
-            try:
-                if not win32gui.IsWindowVisible(hwnd) or win32gui.IsIconic(hwnd):
-                    return True
-                _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                if psutil.Process(pid).name().lower() != wanted:
-                    return True
-                left, top, right, bottom = win32gui.GetClientRect(hwnd)
-                width, height = right - left, bottom - top
-                if width < 400 or height < 300:
-                    return True
-                title = win32gui.GetWindowText(hwnd)
-                matches.append((hwnd, pid, width * height, title, width, height))
-            except Exception:
-                pass
-            return True
+        if os.name == "nt":
+            if win32gui is None or win32process is None:
+                self.game_hwnd = None
+                self.set_window_status("Не установлены компоненты Windows", False)
+                if not silent:
+                    self.log("Не найдены pywin32-компоненты. Проверь requirements.txt.")
+                return None
 
-        try:
-            win32gui.EnumWindows(enum_callback, None)
-        except Exception as exc:
-            self.set_window_status("Ошибка поиска окна", False)
+            def enum_callback(hwnd, _):
+                try:
+                    if not win32gui.IsWindowVisible(hwnd) or win32gui.IsIconic(hwnd):
+                        return True
+                    _, pid = win32process.GetWindowThreadProcessId(hwnd)
+                    if psutil.Process(pid).name().lower() != wanted:
+                        return True
+                    left, top, right, bottom = win32gui.GetClientRect(hwnd)
+                    width, height = right - left, bottom - top
+                    if width < 400 or height < 300:
+                        return True
+                    title = win32gui.GetWindowText(hwnd)
+                    matches.append((hwnd, pid, width * height, title, width, height))
+                except Exception:
+                    pass
+                return True
+
+            try:
+                win32gui.EnumWindows(enum_callback, None)
+                foreground = win32gui.GetForegroundWindow()
+            except Exception as exc:
+                self.set_window_status("Ошибка поиска окна", False)
+                if not silent:
+                    self.log(f"Ошибка поиска окна {wanted}: {exc}")
+                return None
+
+        elif sys.platform.startswith("linux"):
+            if xdisplay is None:
+                self.game_hwnd = None
+                self.set_window_status("Не установлен python-xlib", False)
+                if not silent:
+                    self.log("Для Linux требуется python-xlib и графическая сессия X11.")
+                return None
+
+            dpy = None
+            try:
+                dpy = xdisplay.Display()
+                root = dpy.screen().root
+                pid_atom = dpy.intern_atom("_NET_WM_PID")
+                name_atom = dpy.intern_atom("_NET_WM_NAME")
+                active_atom = dpy.intern_atom("_NET_ACTIVE_WINDOW")
+                stack = list(root.query_tree().children)
+                seen = set()
+                while stack:
+                    window = stack.pop()
+                    if window.id in seen:
+                        continue
+                    seen.add(window.id)
+                    try:
+                        stack.extend(window.query_tree().children)
+                        if window.get_attributes().map_state != X.IsViewable:
+                            continue
+                        pid_prop = window.get_full_property(pid_atom, X.AnyPropertyType)
+                        if pid_prop is None or not len(pid_prop.value):
+                            continue
+                        pid = int(pid_prop.value[0])
+                        try:
+                            process = psutil.Process(pid)
+                            process_names = {process.name().lower()}
+                            try:
+                                process_names.add(os.path.basename(process.exe()).lower())
+                            except Exception:
+                                pass
+                            try:
+                                process_names.update(
+                                    os.path.basename(arg).lower()
+                                    for arg in process.cmdline() if arg
+                                )
+                            except Exception:
+                                pass
+                            if wanted not in process_names:
+                                continue
+                        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                            continue
+
+                        geometry = window.get_geometry()
+                        width, height = int(geometry.width), int(geometry.height)
+                        if width < 400 or height < 300:
+                            continue
+                        coords = root.translate_coords(window, 0, 0)
+                        title_prop = window.get_full_property(name_atom, X.AnyPropertyType)
+                        title = ""
+                        if title_prop is not None:
+                            value = title_prop.value
+                            title = value.decode("utf-8", errors="replace") if isinstance(value, bytes) else str(value)
+                        if not title:
+                            legacy_title = window.get_wm_name() or ""
+                            title = legacy_title.decode("utf-8", errors="replace") if isinstance(legacy_title, bytes) else str(legacy_title)
+                        matches.append((
+                            int(window.id), pid, width * height, title,
+                            width, height, int(coords.x), int(coords.y)
+                        ))
+                    except Exception:
+                        continue
+
+                active_prop = root.get_full_property(active_atom, X.AnyPropertyType)
+                foreground = int(active_prop.value[0]) if active_prop is not None and len(active_prop.value) else None
+            except Exception as exc:
+                self.set_window_status("Ошибка поиска окна X11", False)
+                if not silent:
+                    self.log(f"Не удалось найти окно {wanted} через X11: {exc}")
+                return None
+            finally:
+                if dpy is not None:
+                    try:
+                        dpy.close()
+                    except Exception:
+                        pass
+        else:
+            self.game_hwnd = None
+            self.set_window_status("Платформа не поддерживается", False)
             if not silent:
-                self.log(f"Ошибка поиска окна {wanted}: {exc}")
+                self.log("Поддерживаются Windows и Linux с X11. Wayland-only не поддерживается.")
             return None
 
         if not matches:
@@ -666,21 +803,39 @@ class OwnerSelectionApp:
                 self.log(f"Окно {TARGET_EXE} не найдено. Запусти игру и обнови окно.")
             return None
 
-        foreground = win32gui.GetForegroundWindow()
         selected = next((item for item in matches if item[0] == foreground), None)
         if selected is None:
             selected = max(matches, key=lambda item: item[2])
-        hwnd, pid, _, title, width, height = selected
+        hwnd, pid, _, title, width, height = selected[:6]
         self.game_hwnd, self.game_pid = hwnd, pid
-        label = title or TARGET_EXE
-        self.set_window_status(f"{label}  ·  {width} × {height}", True)
+        self.set_window_status(f"{title or TARGET_EXE}  ·  {width} × {height}", True)
         if not silent:
             self.log(f"Привязано окно {TARGET_EXE}, PID {pid}, область {width}×{height}.")
         return hwnd
 
+    def _linux_window_exists(self, hwnd):
+        if xdisplay is None:
+            return False
+        dpy = None
+        try:
+            dpy = xdisplay.Display()
+            window = dpy.create_resource_object("window", int(hwnd))
+            return window.get_attributes().map_state == X.IsViewable
+        except Exception:
+            return False
+        finally:
+            if dpy is not None:
+                try:
+                    dpy.close()
+                except Exception:
+                    pass
+
     def _get_game_hwnd(self):
-        if self.game_hwnd and win32gui.IsWindow(self.game_hwnd):
-            return self.game_hwnd
+        if self.game_hwnd:
+            if os.name == "nt" and win32gui is not None and win32gui.IsWindow(self.game_hwnd):
+                return self.game_hwnd
+            if sys.platform.startswith("linux") and self._linux_window_exists(self.game_hwnd):
+                return self.game_hwnd
         hwnd = self.refresh_game_window(silent=True)
         if not hwnd:
             raise RuntimeError(f"Окно {TARGET_EXE} не найдено. Открой игру и нажми «Обновить окно».")
@@ -688,46 +843,94 @@ class OwnerSelectionApp:
 
     def _client_geometry(self):
         hwnd = self._get_game_hwnd()
-        left, top, right, bottom = win32gui.GetClientRect(hwnd)
-        width, height = right - left, bottom - top
-        screen_left, screen_top = win32gui.ClientToScreen(hwnd, (0, 0))
+        if os.name == "nt":
+            left, top, right, bottom = win32gui.GetClientRect(hwnd)
+            width, height = right - left, bottom - top
+            screen_left, screen_top = win32gui.ClientToScreen(hwnd, (0, 0))
+        else:
+            dpy = xdisplay.Display()
+            try:
+                window = dpy.create_resource_object("window", int(hwnd))
+                geometry = window.get_geometry()
+                coords = dpy.screen().root.translate_coords(window, 0, 0)
+                width, height = int(geometry.width), int(geometry.height)
+                screen_left, screen_top = int(coords.x), int(coords.y)
+            finally:
+                dpy.close()
         if width <= 0 or height <= 0:
             raise RuntimeError("У HTGame.exe нет доступной клиентской области. Возможно, окно свёрнуто.")
         return hwnd, screen_left, screen_top, width, height
 
     def _bring_game_to_front(self):
         hwnd = self._get_game_hwnd()
-        foreground = win32gui.GetForegroundWindow()
-        try:
-            foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT)
-        except Exception:
-            foreground_root = foreground
-        if foreground_root == hwnd and not win32gui.IsIconic(hwnd):
+        if os.name == "nt":
+            foreground = win32gui.GetForegroundWindow()
+            try:
+                foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT)
+            except Exception:
+                foreground_root = foreground
+            if foreground_root == hwnd and not win32gui.IsIconic(hwnd):
+                return hwnd
+            if win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+            try:
+                win32gui.SetForegroundWindow(hwnd)
+                win32gui.BringWindowToTop(hwnd)
+            except Exception:
+                pass
+            time.sleep(0.20)
+            foreground = win32gui.GetForegroundWindow()
+            try:
+                foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT)
+            except Exception:
+                foreground_root = foreground
+            if foreground_root != hwnd:
+                raise RuntimeError("Не удалось активировать HTGame.exe. Переключись в окно игры и повтори.")
             return hwnd
-        if win32gui.IsIconic(hwnd):
-            win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+
+        dpy = xdisplay.Display()
         try:
-            win32gui.SetForegroundWindow(hwnd)
-            win32gui.BringWindowToTop(hwnd)
-        except Exception:
-            pass
-        time.sleep(0.20)
-        foreground = win32gui.GetForegroundWindow()
-        try:
-            foreground_root = win32gui.GetAncestor(foreground, win32con.GA_ROOT)
-        except Exception:
-            foreground_root = foreground
-        if foreground_root != hwnd:
-            raise RuntimeError("Не удалось активировать HTGame.exe. Переключись в окно игры и повтори.")
-        return hwnd
+            root = dpy.screen().root
+            active_atom = dpy.intern_atom("_NET_ACTIVE_WINDOW")
+            active = root.get_full_property(active_atom, X.AnyPropertyType)
+            active_id = int(active.value[0]) if active is not None and len(active.value) else None
+            if active_id == int(hwnd):
+                return hwnd
+            try:
+                subprocess.run(
+                    ["wmctrl", "-ia", hex(int(hwnd))],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    check=False, timeout=2,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+            try:
+                window = dpy.create_resource_object("window", int(hwnd))
+                window.configure(stack_mode=X.Above)
+                window.set_input_focus(X.RevertToParent, X.CurrentTime)
+                dpy.sync()
+            except Exception:
+                pass
+            time.sleep(0.25)
+            active = root.get_full_property(active_atom, X.AnyPropertyType)
+            active_id = int(active.value[0]) if active is not None and len(active.value) else None
+            if active_id is not None and active_id != int(hwnd):
+                raise RuntimeError("Не удалось активировать окно игры. Переключись на игру и повтори.")
+            return hwnd
+        finally:
+            dpy.close()
 
     def _capture_client_image(self):
         self._bring_game_to_front()
         hwnd, screen_left, screen_top, width, height = self._client_geometry()
-        image = ImageGrab.grab(
-            bbox=(screen_left, screen_top, screen_left + width, screen_top + height),
-            all_screens=True,
-        )
+        if os.name == "nt":
+            image = ImageGrab.grab(
+                bbox=(screen_left, screen_top, screen_left + width, screen_top + height),
+                all_screens=True,
+            )
+        else:
+            # PyAutoGUI uses the X11 screenshot backend (scrot is installed by the package).
+            image = pyautogui.screenshot(region=(screen_left, screen_top, width, height))
         if image.size != (width, height):
             image = image.resize((width, height), Image.Resampling.LANCZOS)
         return image, hwnd, width, height
@@ -961,7 +1164,10 @@ class OwnerSelectionApp:
         reference_x, reference_y = DEFAULT_POINTS[name]
         x = round(reference_x * client_w / REFERENCE_WIDTH)
         y = round(reference_y * client_h / REFERENCE_HEIGHT)
-        return win32gui.ClientToScreen(hwnd, (x, y))
+        if os.name == "nt":
+            return win32gui.ClientToScreen(hwnd, (x, y))
+        _, screen_left, screen_top, _, _ = self._client_geometry()
+        return screen_left + x, screen_top + y
 
     def _wait(self, seconds: float) -> bool:
         remaining = seconds

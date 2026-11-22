@@ -2,77 +2,113 @@
 
 [English](README.md) | [Русский](README.ru.md)
 
-A Windows desktop tool that automates the **Owner's Selection** event in **Hethereau**. It attaches to the game window (`HTGame.exe`), reads the event income and energy counters with OCR, completes the challenge, claims the reward, and repeats while enough energy remains.
+Desktop automation for the **Owner's Selection** event in **Hethereau**.
 
-> This is an unofficial, community-made automation tool. It is not affiliated with or endorsed by the game's developers.
+HOST attaches to the game window (HTGame.exe), reads income and energy counters with OCR, completes the challenge, claims the reward, and repeats while enough energy remains.
+
+> Unofficial community project. HOST is not affiliated with, endorsed by, or supported by the game's developers.
+
+## Downloads
+
+Prebuilt packages are published in [GitHub Releases](https://github.com/M1ST0R/hethereau-owners-selection-tool/releases).
+
+| Platform | Package | Notes |
+|---|---|---|
+| Windows 10/11 x64 | Hethereau-HOST-Windows-x64.exe | Portable single-file executable; includes Tesseract OCR |
+| Linux x86_64 | hethereau-host_<version>_amd64.deb | Debian/Ubuntu package for X11 sessions |
+| Linux x86_64 | Hethereau-HOST-Linux-x86_64.tar.gz | Portable PyInstaller folder; Tesseract must be installed separately |
+
+The latest workflow build is also available under the repository's **Actions → Build packages** run artifacts. A GitHub Release is created automatically when a tag starting with v is pushed (for example, v0.3.0).
 
 ## Features
 
-- Finds and attaches to the `HTGame.exe` window.
-- Uses the game window's client area for screenshots and mouse coordinates.
+- Finds and attaches to the HTGame.exe game window.
+- Uses the game's client area for screenshots and click coordinates.
 - Opens the event shop and repeatedly clicks the hammer.
-- Detects the target income **automatically from the current level**. The target is read from the denominator of the live income counter (for example, `1100` or `1900`); it is not hard-coded to one difficulty.
-- Waits for the target to be reached and confirmed by a second OCR reading.
+- Detects the target income automatically from the live counter denominator (for example, 1100 or 1900); the target is not hard-coded to one difficulty.
+- Requires OCR consensus for the target and confirms completion with a second reading.
 - Exits the challenge, claims the reward, checks energy, and starts another cycle when possible.
-- Provides a dark desktop GUI with cycle, energy, and income indicators, status display, and activity log.
-- Global hotkeys: `F6` to start/pause/resume and `F7` to stop.
-- Supports English and Russian. Use the `RU` / `EN` button in the top-right corner. The selected language is saved locally.
+- Dark desktop GUI with cycle, energy, and income indicators, status display, and activity log.
+- Global hotkeys: F6 to start/pause/resume and F7 to stop.
+- English and Russian UI. Use the RU / EN button in the app header; the choice is saved locally.
 
-## Automatic level detection
+## Installation
 
-The tool reads the income counter as `current / target` and uses the target shown by the game for the selected challenge level. It does not maintain a hard-coded list of difficulty levels.
+### Windows
 
-To avoid acting on incomplete OCR results (for example, reading `70/1` while the real value is `1270/1900`), the app:
+1. Download Hethereau-HOST-Windows-x64.exe from [Releases](https://github.com/M1ST0R/hethereau-owners-selection-tool/releases).
+2. Run the executable. Tesseract OCR and its bundled language data are included.
+3. Open the Owner's Selection event in the game.
+4. Confirm that HOST has found HTGame.exe, then press Start or F6.
 
-- runs several OCR passes with different image channels, scales, and segmentation;
-- requires the target denominator to appear consistently in at least two passes;
-- rejects incomplete values that do not form a valid `current / target` ratio;
-- uses the detected target for the current run and confirms completion with two consecutive readings.
+For running from source, install Python 3.10+, install Tesseract OCR, then run start.bat.
 
-The minimum denominator sanity check is only a guard against tiny OCR fragments; the actual target value is taken from the game screen.
+### Linux (Debian / Ubuntu, X11)
 
-## Requirements
+Install the .deb package:
 
-- Windows 10 or Windows 11.
-- Python 3.10 or newer.
-- Tesseract OCR installed at `C:\Program Files\Tesseract-OCR\tesseract.exe` (or available through `PATH`).
-- The game running in a visible, non-minimized window.
+~~~bash
+sudo apt install ./hethereau-host_*_amd64.deb
+~~~
 
-Python dependencies are listed in `requirements.txt` and are installed by `start.bat`.
+Then launch Hethereau Owner's Selection Tool from the application menu or run:
 
-## Run
+~~~bash
+hethereau-host
+~~~
 
-1. Download and extract the project ZIP, or clone this repository.
-2. Install Tesseract OCR.
-3. Run `start.bat`.
-4. Open the **Owner's Selection** event in the game.
-5. Check that the app has found `HTGame.exe`.
-6. Press **Start** or `F6`.
+The package installs the required X11 utilities and Tesseract language data through package dependencies.
+
+**Linux limitations:**
+- X11 is required. Wayland-only sessions are not supported because global input hooks, window activation, and screen capture rely on X11.
+- The game must be visible and not covered by another window.
+- If running the Windows game through Wine/Proton, Linux support is experimental. The game window must expose the _NET_WM_PID property and the associated process must be identifiable as HTGame.exe.
+- The Linux build is provided for x86_64.
+
+To run from source on Linux, install Python 3.10+, Tk support, Tesseract OCR with English data, and X11 utilities (scrot, wmctrl), then run:
+
+~~~bash
+chmod +x start.sh
+./start.sh
+~~~
+
+### Linux portable archive
+
+Extract Hethereau-HOST-Linux-x86_64.tar.gz, install Tesseract OCR and X11 utilities, then run ./run.sh from the extracted folder.
 
 ## Controls
 
 | Action | Control |
 |---|---|
-| Start / pause / resume | `F6` |
-| Stop automation | `F7` |
+| Start / pause / resume | F6 |
+| Stop automation | F7 |
 | Emergency stop | Move the mouse cursor to the top-left corner of the screen |
-| Change application language | `RU` / `EN` button in the app header |
+| Change application language | RU / EN in the app header |
+
+## Automatic level detection
+
+HOST reads the income counter as current / target and uses the target shown by the game for the selected challenge level. It does not maintain a hard-coded list of level limits.
+
+To avoid acting on incomplete OCR results (for example, 70/1 instead of 1270/1900), the app:
+- runs several OCR passes with different image channels, scales, and segmentation;
+- requires the target denominator to appear consistently in multiple passes;
+- rejects incomplete or invalid ratios;
+- confirms that the target has been reached with two consecutive readings.
+
+The first run on a new level or display resolution should be supervised.
 
 ## OCR diagnostics
 
-Use **Test OCR** in the app. The latest captured regions are saved beside the script:
+Use Test OCR in the app. Captured regions are saved beside the application:
 
-- `debug_energy_capture.png` — energy counter region;
-- `debug_income_capture.png` — income counter region.
+- debug_energy_capture.png — energy counter;
+- debug_income_capture.png — income counter.
 
-If OCR fails, inspect these images and include them when reporting a problem.
+Attach these images to bug reports if OCR fails.
 
-## Notes and limitations
+## Building packages locally
 
-- The game window must remain visible and must not be covered by another window while OCR is running.
-- Click positions are scaled from a 1600×900 reference client area. Other client sizes are proportionally scaled, but should be tested before unattended use.
-- The automation has not been verified against every game level, resolution, or display-scaling configuration. Supervise the first run.
-- The selected application language is stored in `app_config.json`; this local preference file is ignored by Git.
+GitHub Actions builds both platforms. To build manually, install the platform-specific dependencies and PyInstaller, then use the commands in .github/workflows/build.yml.
 
 ## License
 

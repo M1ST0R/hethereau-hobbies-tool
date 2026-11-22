@@ -1,0 +1,147 @@
+name: Build packages
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: Windows x64
+            artifact: windows-x64
+          - os: ubuntu-22.04
+            label: Linux x86_64
+            artifact: linux-x86_64
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Windows OCR engine
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install tesseract --yes --no-progress
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-tk scrot wmctrl tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus libx11-6 libxtst6 libxinerama1 libxrandr2 libxi6 libxcb1 libxkbcommon-x11-0
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pyinstaller
+
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tesseractDir = "$env:ProgramFiles\Tesseract-OCR"
+          if (!(Test-Path "$tesseractDir\tesseract.exe")) { throw "Tesseract was not found at $tesseractDir" }
+          pyinstaller --noconfirm --clean --onefile --windowed --name "Hethereau-HOST" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "$tesseractDir;tesseract" etero_owner_selection.py
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item "dist\Hethereau-HOST.exe" "release\Hethereau-HOST-Windows-x64.exe"
+
+      - name: Build Linux executable and packages
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          pyinstaller --noconfirm --clean --onedir --name HOST --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --hidden-import pynput.keyboard._xorg etero_owner_selection.py
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$VERSION" == "$GITHUB_REF_NAME" ]]; then VERSION="0.0.0+${GITHUB_SHA:0:7}"; fi
+
+          mkdir -p release
+          PACKAGE_ROOT="$RUNNER_TEMP/host-deb"
+          install -d "$PACKAGE_ROOT/opt/hethereau-host" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/DEBIAN"
+          cp -a dist/HOST/. "$PACKAGE_ROOT/opt/hethereau-host/"
+
+          cat > "$PACKAGE_ROOT/usr/bin/hethereau-host" <<'LAUNCHER'
+          #!/bin/sh
+          exec /opt/hethereau-host/HOST "$@"
+          LAUNCHER
+          chmod 755 "$PACKAGE_ROOT/usr/bin/hethereau-host"
+
+          cat > "$PACKAGE_ROOT/usr/share/applications/hethereau-host.desktop" <<'DESKTOP'
+          [Desktop Entry]
+          Type=Application
+          Name=Hethereau Owner's Selection Tool (HOST)
+          Comment=Owner's Selection game event automation
+          Exec=hethereau-host
+          Terminal=false
+          Categories=Game;Utility;
+          DESKTOP
+
+          cat > "$PACKAGE_ROOT/DEBIAN/control" <<CONTROL
+          Package: hethereau-host
+          Version: $VERSION
+          Section: games
+          Priority: optional
+          Architecture: amd64
+          Depends: libx11-6, libxtst6, libxinerama1, libxrandr2, libxi6, libxcb1, libxkbcommon-x11-0, scrot, wmctrl, tesseract-ocr, tesseract-ocr-eng, tesseract-ocr-rus
+          Maintainer: M1ST0R
+          Description: Hethereau Owner's Selection Tool (HOST)
+           Desktop automation for the Owner's Selection event in Hethereau.
+          CONTROL
+
+          dpkg-deb --build "$PACKAGE_ROOT" "release/hethereau-host_${VERSION}_amd64.deb"
+
+          mkdir -p portable
+          cp -a dist/HOST portable/HOST
+          cat > portable/run.sh <<'RUN'
+          #!/bin/sh
+          DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+          exec "$DIR/HOST/HOST" "$@"
+          RUN
+          chmod +x portable/run.sh
+          cp README.md README.ru.md portable/
+          tar -czf release/Hethereau-HOST-Linux-x86_64.tar.gz -C portable .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HOST-${{ matrix.artifact }}
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: HOST-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: release-assets/*
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
