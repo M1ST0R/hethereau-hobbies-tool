@@ -7,3 +7,4 @@ psutil>=5.9.0
 resvg_py>=0.5.0,<0.6.0
 pywin32>=306; platform_system == "Windows"
 python-xlib>=0.33; platform_system == "Linux"
+PySide6-Essentials==6.12.0
