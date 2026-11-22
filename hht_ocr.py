@@ -34,7 +34,9 @@ def parse_ratio_text(
         return parsed
 
     current = int(digit_tokens[0])
-    if 0 <= current <= expected_max:
+    # A lone value equal to the denominator could be the denominator itself.
+    # Refuse that ambiguous case; a full "700/700" ratio is parsed above.
+    if expected_max >= min_max and 0 <= current < expected_max:
         parsed.append((current, expected_max, f"{raw} (ранее подтверждён максимум {expected_max})"))
     return parsed
 
