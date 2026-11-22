@@ -119,7 +119,12 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           CHANNEL="${{ steps.version.outputs.channel }}"
           DEB_VERSION="$VERSION"
-          if [[ "$DEB_VERSION" == *-* ]]; then DEB_VERSION="${DEB_VERSION/-/~}"; fi
+          if [[ "$DEB_VERSION" == *-* ]]; then
+            DEB_BASE="${VERSION%%-*}"
+            DEB_SUFFIX="${VERSION#*-}"
+            DEB_TILDE="$(printf '\\176')"
+            DEB_VERSION="${DEB_BASE}${DEB_TILDE}${DEB_SUFFIX}"
+          fi
 
           mkdir -p release
           PACKAGE_ROOT="$RUNNER_TEMP/hht-deb"
@@ -148,18 +153,17 @@ jobs:
           Categories=Game;Utility;
           DESKTOP
 
-          cat > "$PACKAGE_ROOT/DEBIAN/control" <<'CONTROL'
-          Package: hethereau-hobbies-tool
-          Version: @HHT_DEB_VERSION@
-          Section: games
-          Priority: optional
-          Architecture: amd64
-          Depends: libcairo2, libx11-6, libxtst6, libxinerama1, libxrandr2, libxi6, libxcb1, libxkbcommon-x11-0, scrot, wmctrl, tesseract-ocr, tesseract-ocr-eng, tesseract-ocr-rus
-          Maintainer: M1ST0R
-          Description: Hethereau Hobbies Tool (HHT)
-           Desktop automation toolkit for hobbies in Neverness to Everness.
-          CONTROL
-          sed -i "s|@HHT_DEB_VERSION@|$DEB_VERSION|" "$PACKAGE_ROOT/DEBIAN/control"
+          printf '%s\\n' \\
+            "Package: hethereau-hobbies-tool" \\
+            "Version: $DEB_VERSION" \\
+            "Section: games" \\
+            "Priority: optional" \\
+            "Architecture: amd64" \\
+            "Depends: libcairo2, libx11-6, libxtst6, libxinerama1, libxrandr2, libxi6, libxcb1, libxkbcommon-x11-0, scrot, wmctrl, tesseract-ocr, tesseract-ocr-eng, tesseract-ocr-rus" \\
+            "Maintainer: M1ST0R" \\
+            "Description: Hethereau Hobbies Tool (HHT)" \\
+            " Desktop automation toolkit for hobbies in Neverness to Everness." \\
+            > "$PACKAGE_ROOT/DEBIAN/control"
 
           dpkg-deb --build "$PACKAGE_ROOT" "release/hethereau-hobbies-tool_${DEB_VERSION}_amd64.deb"
 
