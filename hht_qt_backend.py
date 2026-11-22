@@ -17,6 +17,7 @@ from hethereau_hobbies_tool import (
     APP_CHANNEL,
     APP_TITLE,
     APP_VERSION,
+    MAX_LOG_ENTRIES,
     OwnerSelectionApp,
     configure_tesseract,
 )
@@ -200,9 +201,9 @@ class HHTBackend(QObject):
 
         with self._lock:
             self.core.log_history.append((stamp, message))
-            self.core.log_history = self.core.log_history[-1000:]
+            self.core.log_history = self.core.log_history[-MAX_LOG_ENTRIES:]
             self._log_lines.append(line)
-            if len(self._log_lines) > 1000:
+            if len(self._log_lines) > MAX_LOG_ENTRIES:
                 self._log_lines.pop(0)
 
         self.logAdded.emit(line)
@@ -283,7 +284,7 @@ class HHTBackend(QObject):
             self._log_lines = [
                 f"{stamp}  ·  {self.core.tr(message)}"
                 for stamp, message in self.core.log_history
-            ][-1000:]
+            ][-MAX_LOG_ENTRIES:]
         self.logsReset.emit()
         self.logsChanged.emit()
 
