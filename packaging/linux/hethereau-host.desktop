@@ -3,5 +3,6 @@ Type=Application
 Name=Hethereau Owner's Selection Tool (HOST)
 Comment=Owner's Selection game event automation
 Exec=hethereau-host
+Icon=hethereau-host
 Terminal=false
 Categories=Game;Utility;
