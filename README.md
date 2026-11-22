@@ -53,7 +53,7 @@
 
 ## Interface technology
 
-The desktop interface is being migrated to **PySide6 + Qt Quick (QML)**. The automation and OCR remain in Python and are exposed to QML through Qt signals and slots. The interface uses the Qt for Python Essentials distribution, which includes QtQml, QtQuick and QtQuick Controls.
+The desktop interface uses **PySide6 + Qt Quick (QML)**. The automation and OCR remain in Python and are exposed to QML through Qt signals and slots. The interface uses the Qt for Python Essentials distribution, which includes QtQml, QtQuick and QtQuick Controls.
 
 ## Features
 
@@ -79,7 +79,7 @@ Get the latest published version from **[GitHub Releases](https://github.com/M1S
 | **Debian / Ubuntu x86_64** | `hethereau-hobbies-tool_VERSION_amd64.deb` | Installable package for X11 |
 | **Linux x86_64** | `Hethereau-HHT-Linux-x86_64-VERSION.tar.gz` | Portable PyInstaller folder; install Tesseract separately |
 
-No release yet? The latest CI packages can be downloaded from **[Actions → Build HHT packages](https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml)**. Open a successful run and download the `HHT-windows-x64` or `HHT-linux-x86_64` artifact.
+No release yet? The latest CI packages can be downloaded from **[Actions → Build HHT packages](https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml)**. Open a successful run and download the latest `HHT-dev-windows-x64-*` or `HHT-dev-linux-x86_64-*` artifact.
 
 ## Quick start
 
@@ -111,7 +111,7 @@ HHT runs as the current desktop user. **Do not launch it with `sudo`** — eleva
 
 ### Run from source
 
-Requirements: Python 3.10+, Tk support, Tesseract OCR. Linux additionally requires X11, `scrot`, `wmctrl`, and Cairo development libraries.
+Requirements: Python 3.10+, PySide6 Essentials (installed from `requirements.txt`), Tesseract OCR. Linux additionally requires an X11 desktop session, `scrot`, and `wmctrl`.
 
 **Windows:** run `start.bat`.
 
@@ -144,10 +144,10 @@ To reduce mistakes such as reading `1270/1900` as `70/1`, the Owner's Selection 
 1. Separates the yellow current-income digits from the white target digits.
 2. Confirms the static target with independent OCR passes.
 3. Reuses the confirmed target during the active challenge.
-4. Prefers valid readings that preserve leading digits and never accepts a current value greater than the target.
+4. Prefers valid readings that preserve leading digits and preserves income values that overshoot the target, such as `2303/1900`.
 5. Requires the target to be reached in consecutive reads before leaving the event.
 
-The first run on a new resolution or level should be supervised.
+Energy is accepted only when two independent screenshots agree. A single complete OCR ratio is provisional until the second screenshot confirms it. The first run on a new resolution or level should be supervised.
 
 ## Diagnostics
 
