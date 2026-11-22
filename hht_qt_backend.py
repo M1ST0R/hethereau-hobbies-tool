@@ -168,7 +168,7 @@ class HHTBackend(QObject):
     def stopHotkey(self) -> str:
         return self._stop_hotkey
 
-    @Property("QStringList", constant=True)
+    @Property(list, constant=True)
     def hotkeyOptions(self) -> list[str]:
         return list(self.HOTKEY_OPTIONS)
 
