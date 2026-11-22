@@ -103,6 +103,11 @@ ApplicationWindow {
             root.darkMode = backend.theme === "dark"
         }
 
+        function onHotkeysChanged() {
+            toggleHotkeyBox.currentIndex = Math.max(0, backend.hotkeyOptions.indexOf(backend.toggleHotkey))
+            stopHotkeyBox.currentIndex = Math.max(0, backend.hotkeyOptions.indexOf(backend.stopHotkey))
+        }
+
         function onLogsChanged() {
             logsCount.text = root.tr(backend.logCount + " записей", backend.logCount + " entries")
             if (root.currentPage === "logs" && logFlick.followTail) {
