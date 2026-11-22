@@ -1,122 +1,183 @@
-# Hethereau Hobbies Tool (HHT)
+<p align="center">
+  <img src="assets/readme-banner.svg" alt="Hethereau Hobbies Tool" width="100%">
+</p>
 
-[English](README.md) | [Русский](README.ru.md)
+<p align="center">
+  <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml"><img src="https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml/badge.svg" alt="Build packages"></a>
+  <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/releases"><img src="https://img.shields.io/github/v/release/M1ST0R/hethereau-hobbies-tool?label=latest%20release&color=ff648d" alt="Latest release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c8fff.svg" alt="MIT license"></a>
+  <a href="LICENSE-MATERIAL-SYMBOLS.txt"><img src="https://img.shields.io/badge/icons-Material%20Symbols-59cfe0.svg" alt="Material Symbols"></a>
+</p>
 
-**Hethereau Hobbies Tool (HHT)** is a growing desktop toolkit for automating hobbies and side activities in **Neverness to Everness (NTE)**.
+<h3 align="center">One toolkit. Many hobbies. Less repetitive work.</h3>
 
-The first available automation module is **Owner's Selection**. The project is designed to add more independent activity modules later, including fishing and other NTE hobbies.
+<p align="center">
+  <strong>Hethereau Hobbies Tool (HHT)</strong> is a growing desktop toolkit for automating hobbies and side activities in <strong>Neverness to Everness (NTE)</strong>.
+  <br>
+  Start with Owner's Selection today. Add fishing and more activities as separate modules tomorrow.
+</p>
 
-> Unofficial community project. HHT is not affiliated with, endorsed by, or supported by the game's developers.
+<p align="center">
+  <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/releases"><strong>Download</strong></a>
+  ·
+  <a href="#features"><strong>Features</strong></a>
+  ·
+  <a href="#quick-start"><strong>Quick start</strong></a>
+  ·
+  <a href="README.ru.md"><strong>Русская версия</strong></a>
+</p>
 
-## Downloads
+---
 
-Prebuilt packages are published in [GitHub Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
+> [!NOTE]
+> HHT is an unofficial community project. It is not affiliated with, endorsed by, or supported by the developers of Neverness to Everness.
 
-| Platform | Package | Notes |
-|---|---|---|
-| Windows 10/11 x64 | Hethereau-HHT-Windows-x64.exe | Portable single-file executable; includes Tesseract OCR |
-| Linux x86_64 | hethereau-hobbies-tool_VERSION_amd64.deb | Debian/Ubuntu package for X11 sessions |
-| Linux x86_64 | Hethereau-HHT-Linux-x86_64.tar.gz | Portable PyInstaller folder; Tesseract must be installed separately |
+## ✦ At a glance
 
-Build artifacts are also available under **Actions → Build HHT packages**. A GitHub Release is created automatically when a tag starting with v is pushed (for example, v0.4.0).
+| | |
+|---|---|
+| **Current module** | Owner's Selection |
+| **Game process** | `HTGame.exe` |
+| **Platforms** | Windows 10/11 x64 · Linux x86_64 (X11) |
+| **Interface** | English · Русский |
+| **Themes** | Light · Dark |
+| **Automation** | OCR + window-bound input |
+| **Hotkeys** | `F6` Start / Pause · `F7` Stop |
 
 ## Features
 
-- Attaches to the HTGame.exe game window and uses its client area for screenshots and clicks.
-- Automates the Owner's Selection event: opens the event shop, clicks the hammer, reads income, claims the reward, checks energy, and repeats while possible.
-- Detects target income from the live counter, so different challenge levels can use different target values.
-- Uses OCR consensus and confirmation reads to avoid reacting to incomplete or animated numbers.
-- Desktop dashboard with cycles, energy, income, current status, and global hotkeys.
-- Separate **View logs** and **About** windows.
-- Language dropdown with English and Russian; the language registry is structured to add more translations.
-- Explicit **Light / Dark** theme switch; the choice is saved locally.
-- Actual Google **Material Symbols Outlined** SVG glyphs are bundled and rendered locally. No web font or network connection is needed at runtime.
-- Windows build requests Administrator privileges through UAC, allowing HHT to send input to elevated NTE processes.
-- Global hotkeys: F6 to start/pause/resume and F7 to stop.
+- **Game-aware automation** — attaches to the `HTGame.exe` window and calculates clicks relative to its client area.
+- **Owner's Selection module** — opens the event shop, taps the hammer, tracks income, claims the challenge reward, checks energy, and repeats while possible.
+- **Adaptive income target** — reads the target shown by the current level; no hard-coded 1100 / 1900 level table.
+- **OCR validation** — separates the changing yellow income from the static white target and confirms readings before acting.
+- **Live dashboard** — cycle count, energy, income, game connection, status, and hotkey hints.
+- **Separate utility windows** — open the full activity log or the About dialog when needed.
+- **Personalized interface** — language dropdown, Light / Dark switch, and saved preferences.
+- **Material Symbols Outlined** — official SVG glyphs bundled locally and tinted for the active theme. No remote font requests.
+- **Windows elevation** — the Windows build requests Administrator privileges through UAC so HHT can send input to an elevated game process.
 
-## Installation
+## Downloads
+
+Get the latest published version from **[GitHub Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases)**.
+
+| Platform | Package | Notes |
+|---|---|---|
+| **Windows 10/11 x64** | `Hethereau-HHT-Windows-x64.exe` | Portable single-file app; Tesseract OCR is bundled |
+| **Debian / Ubuntu x86_64** | `hethereau-hobbies-tool_VERSION_amd64.deb` | Installable package for X11 |
+| **Linux x86_64** | `Hethereau-HHT-Linux-x86_64.tar.gz` | Portable PyInstaller folder; install Tesseract separately |
+
+No release yet? The latest CI packages can be downloaded from **[Actions → Build HHT packages](https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml)**. Open a successful run and download the `HHT-windows-x64` or `HHT-linux-x86_64` artifact.
+
+## Quick start
 
 ### Windows
 
-1. Download Hethereau-HHT-Windows-x64.exe from [Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
-2. Run the EXE and approve the Windows UAC prompt.
-3. Open the Owner's Selection event in NTE.
-4. Confirm that HHT has found HTGame.exe, then press Start / Pause or F6.
+1. Download `Hethereau-HHT-Windows-x64.exe` from [Releases](https://github.com/M1ST0R/hethereau-hobbies-tool/releases).
+2. Launch HHT and approve the Windows UAC prompt.
+3. Open **Owner's Selection** in NTE.
+4. Wait until HHT finds `HTGame.exe`.
+5. Press **Start / Pause** or `F6`.
 
-The EXE contains a requireAdministrator manifest. Running start.bat from source also requests elevation before installing dependencies and launching HHT.
+The packaged EXE contains a `requireAdministrator` manifest. To run from source, use `start.bat`; it requests elevation before installing Python dependencies.
 
 ### Linux (Debian / Ubuntu, X11)
 
-Install the DEB package:
+Install the package:
 
-    sudo apt install ./hethereau-hobbies-tool_*_amd64.deb
+```bash
+sudo apt install ./hethereau-hobbies-tool_*_amd64.deb
+```
 
-Then launch Hethereau Hobbies Tool from the application menu or run:
+Then launch **Hethereau Hobbies Tool** from the application menu or run:
 
-    hht
+```bash
+hht
+```
 
-The package installs required X11 utilities, Cairo runtime libraries, and Tesseract language data through package dependencies. HHT runs as the current desktop user; do not launch it with sudo.
+HHT runs as the current desktop user. **Do not launch it with `sudo`** — elevated root GUI processes can lose access to the user's desktop session and input devices.
 
-**Linux limitations:**
-- X11 is required. Wayland-only sessions are not supported because global input hooks, window activation, and screen capture rely on X11.
-- The game must be visible and not covered by another window.
-- If the Windows game is running through Wine/Proton, support is experimental. The game window must expose _NET_WM_PID, and the associated process must be identifiable as HTGame.exe.
-- The Linux build targets x86_64.
+### Run from source
 
-To run from source on Linux, install Python 3.10+, Tk support, Tesseract OCR with English data, X11 utilities (scrot, wmctrl), and Cairo development libraries, then run:
+Requirements: Python 3.10+, Tk support, Tesseract OCR. Linux additionally requires X11, `scrot`, `wmctrl`, and Cairo development libraries.
 
-    chmod +x start.sh
-    ./start.sh
+**Windows:** run `start.bat`.
 
-### Linux portable archive
+**Linux:**
 
-Extract Hethereau-HHT-Linux-x86_64.tar.gz, install Tesseract OCR and X11 utilities, then run ./run.sh from the extracted folder.
+```bash
+chmod +x start.sh
+./start.sh
+```
 
 ## Controls
 
 | Action | Control |
 |---|---|
-| Start / pause / resume | F6 |
-| Stop automation | F7 |
-| Emergency stop | Move the mouse cursor to the top-left corner of the screen |
+| Start automation | `F6` |
+| Pause / resume | `F6` |
+| Stop automation | `F7` |
+| Emergency stop | Move the cursor to the top-left screen corner |
 | Change language | Language dropdown in the header |
-| Change theme | Light / Dark switch in the header |
-| Open logs | View logs button |
-| About HHT | About button |
+| Change appearance | Light / Dark switch in the header |
+| View activity history | **View logs** |
+| App information | **About** |
 
-## Adding another language
+## How level detection works
 
-The language selector is data-driven. To add a language:
-1. Add its language code and display label to SUPPORTED_LANGUAGES.
-2. Add a matching dictionary to LANGUAGE_TRANSLATIONS.
-3. Translate the interface strings and test layouts with longer labels.
+The challenge target can differ between levels. HHT reads the current / target counter from the game instead of relying on a fixed list.
 
-English remains the fallback for strings that have not yet been translated.
+To reduce mistakes such as reading `1270/1900` as `70/1`, the Owner's Selection module:
+1. Separates the yellow current-income digits from the white target digits.
+2. Confirms the static target with independent OCR passes.
+3. Reuses the confirmed target during the active challenge.
+4. Prefers valid readings that preserve leading digits and never accepts a current value greater than the target.
+5. Requires the target to be reached in consecutive reads before leaving the event.
 
-## Current and planned hobby modules
+The first run on a new resolution or level should be supervised.
 
-- **Available:** Owner's Selection.
-- **Planned:** fishing and other NTE hobby activities.
+## Diagnostics
 
-Each activity should be implemented as a separate module so it can have its own game-window logic, OCR regions, controls, and status reporting.
+Use **Test OCR** in the app. HHT saves the captured counter regions beside the application:
 
-## OCR diagnostics
+- `debug_income_capture.png` — income counter;
+- `debug_energy_capture.png` — energy counter.
 
-Use Test OCR in the app. Captured regions are saved beside the application:
+When reporting an OCR issue, attach both images and copy the recent activity log.
 
-- debug_energy_capture.png — energy counter;
-- debug_income_capture.png — income counter.
+## Project direction
 
-Attach these images to bug reports if OCR fails.
+HHT is intended to become a collection of small, independent activity modules rather than one script tied to a single event.
 
-## Building packages locally
+| Module | Status |
+|---|---|
+| Owner's Selection | <strong>Available</strong> |
+| Fishing | Planned |
+| More NTE hobbies | Planned |
 
-GitHub Actions builds Windows and Linux packages. The main workflow is .github/workflows/build.yml.
+Each module can have its own window logic, screen regions, OCR strategy, controls, and status reporting while sharing the same app shell.
 
-## Icon attribution
+## Building
 
-The UI icons are Google's **Material Symbols Outlined**, distributed under Apache License 2.0. The license text is included in LICENSE-MATERIAL-SYMBOLS.txt. The HHT app launcher icon/mascot is a separate branding asset and will be added after the final visual direction is chosen.
+GitHub Actions builds both platforms on pushes to `main`, pull requests, and manual dispatches.
 
-## License
+- [Build workflow](.github/workflows/build.yml)
+- Windows: one-file EXE with UAC manifest.
+- Linux: Debian package and portable TAR.GZ.
+- Push a version tag such as `v0.4.0` to create a GitHub Release automatically.
 
-HHT source code: MIT. See LICENSE.
+## App icon
+
+The launcher icon is intentionally kept separate from the interface symbols. The application loads `assets/app_icon.png` when present; the build workflow generates a multi-size Windows `.ico` and includes the PNG in the Linux package.
+
+**Icon artwork location:** `assets/app_icon.png` (square PNG, recommended 1024×1024 with transparent background).
+
+## Credits
+
+- UI glyphs: [Google Material Symbols Outlined](https://github.com/google/material-design-icons), licensed under Apache License 2.0. See [LICENSE-MATERIAL-SYMBOLS.txt](LICENSE-MATERIAL-SYMBOLS.txt).
+- HHT source code: MIT. See [LICENSE](LICENSE).
+
+---
+
+<p align="center">
+  <sub>Built for the little things you would rather not repeat.</sub>
+</p>
