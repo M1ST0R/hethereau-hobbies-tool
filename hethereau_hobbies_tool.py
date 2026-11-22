@@ -1721,6 +1721,14 @@ class OwnerSelectionApp:
                 reached = False
                 reached_confirmations = 0
                 active_income_target = None
+                income_thread = None
+                income_result = None
+
+                def read_income_background(target, output):
+                    try:
+                        output["result"] = self.read_income(expected_max=target)
+                    except Exception as exc:
+                        output["error"] = exc
 
                 while not self.stop_event.is_set():
                     while self.pause_event.is_set() and not self.stop_event.is_set():
@@ -1729,19 +1737,48 @@ class OwnerSelectionApp:
                     if self.stop_event.is_set():
                         break
 
+                    # Keep the hammer loop independent from Tesseract. OCR works
+                    # on its own captured frame while clicks continue at a steady rate.
                     self._click("Молоток")
                     now = time.monotonic()
-                    if now - last_ocr >= OCR_INTERVAL:
-                        current, maximum, raw = self.read_income(expected_max=active_income_target)
+
+                    if (
+                        income_thread is None
+                        and now - last_ocr >= OCR_INTERVAL
+                    ):
+                        income_result = {}
+                        income_thread = threading.Thread(
+                            target=read_income_background,
+                            args=(active_income_target, income_result),
+                            daemon=True,
+                            name="HHT-Income-OCR",
+                        )
+                        income_thread.start()
                         last_ocr = now
+
+                    if (
+                        income_thread is not None
+                        and not income_thread.is_alive()
+                        and income_result is not None
+                        and ("result" in income_result or "error" in income_result)
+                    ):
+                        if "error" in income_result:
+                            current, maximum = None, None
+                            raw = f"OCR error: {income_result['error']}"
+                        else:
+                            current, maximum, raw = income_result["result"]
+
+                        income_thread = None
+                        income_result = None
+                        now = time.monotonic()
+
                         if current is not None and maximum is not None:
                             last_seen = now
                             if active_income_target != maximum:
                                 active_income_target = maximum
                                 self.log(f"Определён целевой доход текущего уровня: {maximum}.")
-                                self.set_stage(f"Накопление целевого дохода: {maximum}")
-                            else:
-                                self.set_stage(f"Накопление целевого дохода: {maximum}")
+                            self.set_stage(f"Накопление целевого дохода: {maximum}")
+
                             if current >= maximum:
                                 reached_confirmations += 1
                                 if reached_confirmations >= 2:
@@ -1761,6 +1798,7 @@ class OwnerSelectionApp:
                             self.log(f"Распознавание дохода не работает более 15 секунд. Последний результат: {raw!r}.")
                             self.set_status("ОШИБКА РАСПОЗНАВАНИЯ", "Значение дохода не читается. Проверь debug_income_capture.png.")
                             return
+
                     if not self._wait(CLICK_INTERVAL):
                         break
 
