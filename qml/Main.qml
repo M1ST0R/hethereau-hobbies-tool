@@ -11,7 +11,14 @@ ApplicationWindow {
     minimumWidth: 940
     minimumHeight: 680
     title: "Hethereau Hobbies Tool"
-    color: bg
+    flags: Qt.Window | Qt.FramelessWindowHint
+    color: "transparent"
+    background: Rectangle {
+        radius: 14
+        color: root.bg
+        border.color: root.borderColor
+        border.width: 1
+    }
 
     property bool darkMode: backend.theme === "dark"
     property string currentPage: "owner"
@@ -52,16 +59,20 @@ ApplicationWindow {
     function pageIndex() {
         if (currentPage === "fishing")
             return 1
-        if (currentPage === "about")
+        if (currentPage === "settings")
             return 2
-        if (currentPage === "logs")
+        if (currentPage === "about")
             return 3
+        if (currentPage === "logs")
+            return 4
         return 0
     }
 
     function pageTitle() {
         if (currentPage === "fishing")
             return tr("Рыбалка", "Fishing")
+        if (currentPage === "settings")
+            return tr("Настройки", "Settings")
         if (currentPage === "about")
             return tr("О программе", "About")
         if (currentPage === "logs")
@@ -72,6 +83,8 @@ ApplicationWindow {
     function pageSubtitle() {
         if (currentPage === "fishing")
             return tr("Отдельный модуль автоматизации · скоро", "Standalone automation module · coming soon")
+        if (currentPage === "settings")
+            return tr("Управление, горячие клавиши и поведение приложения", "Controls, global shortcuts and application behavior")
         if (currentPage === "about")
             return tr("Информация о приложении и его возможностях", "Application information and capabilities")
         if (currentPage === "logs")
@@ -90,42 +103,154 @@ ApplicationWindow {
             root.darkMode = backend.theme === "dark"
         }
 
-        function onLogAdded(line) {
-            if (root.currentPage !== "logs")
-                return
-            var atBottom = logFlick.contentY + logFlick.height >= logFlick.contentHeight - 16
-            logsArea.append(line)
-            Qt.callLater(function() {
-                if (atBottom)
-                    logFlick.contentY = Math.max(0, logFlick.contentHeight - logFlick.height)
-            })
-        }
-
-        function onLogsReset() {
-            logsArea.text = backend.logsText
-            Qt.callLater(function() {
-                logFlick.contentY = Math.max(0, logFlick.contentHeight - logFlick.height)
-            })
-        }
-
         function onLogsChanged() {
             logsCount.text = root.tr(backend.logCount + " записей", backend.logCount + " entries")
+            if (root.currentPage === "logs" && logFlick.followTail) {
+                Qt.callLater(function() {
+                    logFlick.contentY = Math.max(0, logFlick.contentHeight - logFlick.height)
+                })
+            }
         }
     }
 
-    // Background atmosphere: restrained, low-contrast color fields.
-    Rectangle {
+    ColumnLayout {
         anchors.fill: parent
-        z: -1
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: root.darkMode ? "#0C1220" : "#F5F7FC" }
-            GradientStop { position: 1.0; color: root.darkMode ? "#090D16" : "#EEF2F9" }
-        }
-    }
-
-    RowLayout {
-        anchors.fill: parent
+        anchors.margins: 6
         spacing: 0
+
+        Rectangle {
+            id: titleBar
+            Layout.fillWidth: true
+            Layout.preferredHeight: 42
+            radius: 11
+            color: root.darkMode ? "#111A2B" : "#FFFFFF"
+            border.color: root.borderColor
+            clip: true
+
+            MouseArea {
+                anchors.fill: parent
+                z: 0
+                acceptedButtons: Qt.LeftButton
+                onPressed: root.startSystemMove()
+            }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 13
+                anchors.rightMargin: 8
+                spacing: 9
+                z: 1
+
+                Image {
+                    source: "../assets/app_icon.png"
+                    sourceSize: Qt.size(24, 24)
+                    Layout.preferredWidth: 24
+                    Layout.preferredHeight: 24
+                }
+
+                Text {
+                    text: "HETHEREAU"
+                    color: root.accentBright
+                    font.pixelSize: 9
+                    font.bold: true
+                    font.letterSpacing: 1.1
+                }
+
+                Text {
+                    text: "HOBBIES TOOL"
+                    color: root.textColor
+                    font.pixelSize: 9
+                    font.bold: true
+                    font.letterSpacing: 0.5
+                }
+
+                Rectangle {
+                    Layout.preferredWidth: 1
+                    Layout.preferredHeight: 18
+                    color: root.borderColor
+                    Layout.leftMargin: 4
+                    Layout.rightMargin: 4
+                }
+
+                Text {
+                    text: root.pageTitle()
+                    color: root.mutedColor
+                    font.pixelSize: 9
+                    elide: Text.ElideRight
+                    Layout.maximumWidth: 260
+                }
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                }
+
+                Button {
+                    id: minimizeWindowButton
+                    Layout.preferredWidth: 34
+                    Layout.preferredHeight: 29
+                    onClicked: root.showMinimized()
+                    background: Rectangle {
+                        radius: 7
+                        color: minimizeWindowButton.hovered ? root.panelAlt : "transparent"
+                    }
+                    contentItem: Text {
+                        text: "—"
+                        color: root.mutedColor
+                        font.pixelSize: 15
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+
+                Button {
+                    id: maximizeWindowButton
+                    Layout.preferredWidth: 34
+                    Layout.preferredHeight: 29
+                    onClicked: {
+                        if (root.visibility === Window.Maximized)
+                            root.showNormal()
+                        else
+                            root.showMaximized()
+                    }
+                    background: Rectangle {
+                        radius: 7
+                        color: maximizeWindowButton.hovered ? root.panelAlt : "transparent"
+                    }
+                    contentItem: Text {
+                        text: root.visibility === Window.Maximized ? "❐" : "□"
+                        color: root.mutedColor
+                        font.pixelSize: 13
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+
+                Button {
+                    id: closeWindowButton
+                    Layout.preferredWidth: 37
+                    Layout.preferredHeight: 29
+                    onClicked: root.close()
+                    background: Rectangle {
+                        radius: 7
+                        color: closeWindowButton.hovered ? "#C94C63" : "transparent"
+                    }
+                    contentItem: Text {
+                        text: "×"
+                        color: closeWindowButton.hovered ? "#FFFFFF" : root.mutedColor
+                        font.pixelSize: 20
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                }
+            }
+        }
+
+        RowLayout {
+            id: workspaceLayout
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
 
         // -----------------------------------------------------------------
         // SIDEBAR
@@ -328,8 +453,9 @@ ApplicationWindow {
 
                 Repeater {
                     model: [
-                        { id: "logs", ru: "Журнал событий", en: "Activity log", icon: "article" },
-                        { id: "about", ru: "О программе", en: "About", icon: "info" }
+                        { id: "settings", ru: "Настройки", en: "Settings", icon: "", glyph: "⚙" },
+                        { id: "logs", ru: "Журнал событий", en: "Activity log", icon: "article", glyph: "" },
+                        { id: "about", ru: "О программе", en: "About", icon: "info", glyph: "" }
                     ]
 
                     delegate: Rectangle {
@@ -349,11 +475,20 @@ ApplicationWindow {
                             anchors.rightMargin: 12
                             spacing: 12
                             Image {
-                                source: root.iconPath(toolNav.modelData.icon)
+                                visible: toolNav.modelData.icon !== ""
+                                source: toolNav.modelData.icon !== "" ? root.iconPath(toolNav.modelData.icon) : ""
                                 sourceSize: Qt.size(18, 18)
                                 Layout.preferredWidth: 18
                                 Layout.preferredHeight: 18
                                 opacity: toolNav.selected ? 1.0 : 0.72
+                            }
+                            Text {
+                                visible: toolNav.modelData.icon === ""
+                                text: toolNav.modelData.glyph
+                                color: toolNav.selected ? accentBright : mutedColor
+                                font.pixelSize: 17
+                                Layout.preferredWidth: 18
+                                horizontalAlignment: Text.AlignHCenter
                             }
                             Text {
                                 text: root.tr(toolNav.modelData.ru, toolNav.modelData.en)
@@ -417,14 +552,6 @@ ApplicationWindow {
                     }
                 }
 
-                Text {
-                    text: "F6  " + root.tr("СТАРТ / ПАУЗА", "START / PAUSE") + "     F7  " + root.tr("СТОП", "STOP")
-                    color: faintColor
-                    font.pixelSize: 8
-                    font.letterSpacing: 0.5
-                    Layout.leftMargin: 5
-                    Layout.topMargin: 12
-                }
             }
         }
 
@@ -767,8 +894,8 @@ ApplicationWindow {
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: 43
                                             text: backend.running && !backend.paused
-                                                ? root.tr("Пауза  ·  F6", "Pause  ·  F6")
-                                                : root.tr("Запустить  ·  F6", "Start  ·  F6")
+                                                ? root.tr("Пауза", "Pause")
+                                                : root.tr("Запустить", "Start")
                                             onClicked: backend.toggleRunPause()
                                             background: Rectangle {
                                                 radius: 11
@@ -801,7 +928,7 @@ ApplicationWindow {
                                             id: stopButton
                                             Layout.fillWidth: true
                                             Layout.preferredHeight: 36
-                                            text: root.tr("Остановить  ·  F7", "Stop  ·  F7")
+                                            text: root.tr("Остановить", "Stop")
                                             onClicked: backend.stop()
                                             background: Rectangle {
                                                 radius: 10
@@ -1045,72 +1172,6 @@ ApplicationWindow {
                                 }
                             }
 
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 48
-                                radius: 12
-                                color: panelAlt
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 14
-                                    anchors.rightMargin: 14
-                                    spacing: 9
-                                    Image {
-                                        source: root.iconPath("keyboard")
-                                        sourceSize: Qt.size(17, 17)
-                                        Layout.preferredWidth: 17
-                                        Layout.preferredHeight: 17
-                                    }
-                                    Text {
-                                        text: root.tr("БЫСТРЫЕ КЛАВИШИ", "SHORTCUTS")
-                                        color: faintColor
-                                        font.pixelSize: 8
-                                        font.bold: true
-                                        font.letterSpacing: 0.8
-                                    }
-                                    Item { Layout.fillWidth: true }
-                                    Rectangle {
-                                        radius: 6
-                                        color: panel
-                                        border.color: borderColor
-                                        implicitWidth: 29
-                                        implicitHeight: 23
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "F6"
-                                            color: accentBright
-                                            font.pixelSize: 9
-                                            font.bold: true
-                                        }
-                                    }
-                                    Text {
-                                        text: root.tr("Запуск / пауза", "Start / pause")
-                                        color: textColor
-                                        font.pixelSize: 8
-                                    }
-                                    Rectangle {
-                                        radius: 6
-                                        color: panel
-                                        border.color: borderColor
-                                        implicitWidth: 29
-                                        implicitHeight: 23
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "F7"
-                                            color: red
-                                            font.pixelSize: 9
-                                            font.bold: true
-                                        }
-                                    }
-                                    Text {
-                                        text: root.tr("Стоп", "Stop")
-                                        color: textColor
-                                        font.pixelSize: 8
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
 
                 // =========================================================
@@ -1320,6 +1381,243 @@ ApplicationWindow {
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // =========================================================
+                // APPLICATION SETTINGS
+                // =========================================================
+                Item {
+                    Flickable {
+                        anchors.fill: parent
+                        clip: true
+                        contentWidth: width
+                        contentHeight: settingsContent.implicitHeight + 18
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        ColumnLayout {
+                            id: settingsContent
+                            width: parent.width
+                            spacing: 15
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 112
+                                radius: 17
+                                color: panel
+                                border.color: borderColor
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 19
+                                    spacing: 14
+                                    Rectangle {
+                                        Layout.preferredWidth: 43
+                                        Layout.preferredHeight: 43
+                                        radius: 13
+                                        color: root.darkMode ? "#302A50" : "#EFEDFF"
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "⚙"
+                                            color: accentBright
+                                            font.pixelSize: 24
+                                        }
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 5
+                                        Text {
+                                            text: root.tr("Управление приложением", "Application controls")
+                                            color: textColor
+                                            font.pixelSize: 14
+                                            font.bold: true
+                                        }
+                                        Text {
+                                            text: root.tr(
+                                                "Настрой глобальные клавиши запуска и остановки. Выбранные значения сохраняются между запусками.",
+                                                "Configure global start and stop keys. Your choices are saved between sessions."
+                                            )
+                                            color: mutedColor
+                                            font.pixelSize: 10
+                                            wrapMode: Text.WordWrap
+                                            Layout.fillWidth: true
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                radius: 16
+                                color: panel
+                                border.color: borderColor
+                                implicitHeight: hotkeySettings.implicitHeight + 34
+
+                                ColumnLayout {
+                                    id: hotkeySettings
+                                    anchors.fill: parent
+                                    anchors.margins: 17
+                                    spacing: 13
+
+                                    Text {
+                                        text: root.tr("ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ", "GLOBAL SHORTCUTS")
+                                        color: faintColor
+                                        font.pixelSize: 8
+                                        font.bold: true
+                                        font.letterSpacing: 1.3
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 15
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+                                            Text {
+                                                text: root.tr("Запуск / пауза", "Start / pause")
+                                                color: textColor
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+                                            Text {
+                                                text: root.tr("Переключает выполнение автоматизации", "Toggles automation")
+                                                color: mutedColor
+                                                font.pixelSize: 9
+                                            }
+                                        }
+
+                                        ComboBox {
+                                            id: toggleHotkeyBox
+                                            Layout.preferredWidth: 118
+                                            model: backend.hotkeyOptions
+                                            currentIndex: Math.max(0, backend.hotkeyOptions.indexOf(backend.toggleHotkey))
+                                            onActivated: backend.setHotkeys(currentText, stopHotkeyBox.currentText)
+                                            background: Rectangle {
+                                                radius: 9
+                                                color: panelAlt
+                                                border.color: borderColor
+                                            }
+                                            contentItem: Text {
+                                                leftPadding: 10
+                                                text: toggleHotkeyBox.displayText
+                                                color: textColor
+                                                font.pixelSize: 10
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 1
+                                        color: borderColor
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 15
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+                                            Text {
+                                                text: root.tr("Остановка", "Stop")
+                                                color: textColor
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                            }
+                                            Text {
+                                                text: root.tr("Прекращает ввод и завершает цикл", "Stops input and ends the cycle")
+                                                color: mutedColor
+                                                font.pixelSize: 9
+                                            }
+                                        }
+
+                                        ComboBox {
+                                            id: stopHotkeyBox
+                                            Layout.preferredWidth: 118
+                                            model: backend.hotkeyOptions
+                                            currentIndex: Math.max(0, backend.hotkeyOptions.indexOf(backend.stopHotkey))
+                                            onActivated: backend.setHotkeys(toggleHotkeyBox.currentText, currentText)
+                                            background: Rectangle {
+                                                radius: 9
+                                                color: panelAlt
+                                                border.color: borderColor
+                                            }
+                                            contentItem: Text {
+                                                leftPadding: 10
+                                                text: stopHotkeyBox.displayText
+                                                color: textColor
+                                                font.pixelSize: 10
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Item { Layout.fillWidth: true }
+                                        Button {
+                                            id: resetHotkeysButton
+                                            text: root.tr("По умолчанию", "Restore defaults")
+                                            onClicked: backend.setHotkeys("F6", "F7")
+                                            background: Rectangle {
+                                                radius: 9
+                                                color: resetHotkeysButton.hovered ? panelAlt : "transparent"
+                                                border.color: borderColor
+                                            }
+                                            contentItem: Text {
+                                                text: resetHotkeysButton.text
+                                                color: mutedColor
+                                                font.pixelSize: 9
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+
+                                    Text {
+                                        text: root.tr(
+                                            "Можно выбрать любую пару разных функциональных клавиш F1–F12. Изменения применяются сразу.",
+                                            "Choose any two different function keys from F1–F12. Changes apply immediately."
+                                        )
+                                        color: faintColor
+                                        font.pixelSize: 9
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                radius: 15
+                                color: panelAlt
+                                implicitHeight: preferencesInfo.implicitHeight + 28
+                                ColumnLayout {
+                                    id: preferencesInfo
+                                    anchors.fill: parent
+                                    anchors.margins: 15
+                                    spacing: 6
+                                    Text {
+                                        text: root.tr("ВНЕШНИЙ ВИД", "APPEARANCE")
+                                        color: faintColor
+                                        font.pixelSize: 8
+                                        font.bold: true
+                                        font.letterSpacing: 1.2
+                                    }
+                                    Text {
+                                        text: root.tr(
+                                            "Тема и язык интерфейса переключаются в верхней панели и сохраняются автоматически.",
+                                            "Change the interface theme and language from the top bar. Both are saved automatically."
+                                        )
+                                        color: textColor
+                                        font.pixelSize: 10
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
                                     }
                                 }
                             }
@@ -1590,6 +1888,14 @@ ApplicationWindow {
                                     contentWidth: width
                                     contentHeight: logsArea.height
                                     boundsBehavior: Flickable.StopAtBounds
+                                    property bool followTail: true
+                                    onMovementEnded: followTail = atYEnd
+                                    onContentHeightChanged: {
+                                        if (followTail && root.currentPage === "logs")
+                                            Qt.callLater(function() {
+                                                logFlick.contentY = Math.max(0, logFlick.contentHeight - logFlick.height)
+                                            })
+                                    }
 
                                     TextArea {
                                         id: logsArea
@@ -1627,7 +1933,83 @@ ApplicationWindow {
         }
     }
 
+    // Native edge resizing, with custom title-bar controls.
+    MouseArea {
+        z: 1000
+        visible: root.visibility !== Window.Maximized
+        width: 6
+        anchors.left: parent.left
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        cursorShape: Qt.SizeHorCursor
+        onPressed: root.startSystemResize(Qt.LeftEdge)
+    }
+    MouseArea {
+        z: 1000
+        visible: root.visibility !== Window.Maximized
+        width: 6
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        cursorShape: Qt.SizeHorCursor
+        onPressed: root.startSystemResize(Qt.RightEdge)
+    }
+    MouseArea {
+        z: 1000
+        visible: root.visibility !== Window.Maximized
+        height: 6
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        cursorShape: Qt.SizeVerCursor
+        onPressed: root.startSystemResize(Qt.TopEdge)
+    }
+    MouseArea {
+        z: 1000
+        visible: root.visibility !== Window.Maximized
+        height: 6
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        cursorShape: Qt.SizeVerCursor
+        onPressed: root.startSystemResize(Qt.BottomEdge)
+    }
+    MouseArea {
+        z: 1001
+        visible: root.visibility !== Window.Maximized
+        width: 10; height: 10
+        anchors.left: parent.left; anchors.top: parent.top
+        cursorShape: Qt.SizeFDiagCursor
+        onPressed: root.startSystemResize(Qt.LeftEdge | Qt.TopEdge)
+    }
+    MouseArea {
+        z: 1001
+        visible: root.visibility !== Window.Maximized
+        width: 10; height: 10
+        anchors.right: parent.right; anchors.top: parent.top
+        cursorShape: Qt.SizeBDiagCursor
+        onPressed: root.startSystemResize(Qt.RightEdge | Qt.TopEdge)
+    }
+    MouseArea {
+        z: 1001
+        visible: root.visibility !== Window.Maximized
+        width: 10; height: 10
+        anchors.left: parent.left; anchors.bottom: parent.bottom
+        cursorShape: Qt.SizeBDiagCursor
+        onPressed: root.startSystemResize(Qt.LeftEdge | Qt.BottomEdge)
+    }
+    MouseArea {
+        z: 1001
+        visible: root.visibility !== Window.Maximized
+        width: 10; height: 10
+        anchors.right: parent.right; anchors.bottom: parent.bottom
+        cursorShape: Qt.SizeFDiagCursor
+        onPressed: root.startSystemResize(Qt.RightEdge | Qt.BottomEdge)
+    }
+
     Component.onCompleted: {
-        logsArea.text = backend.logsText
+        Qt.callLater(function() {
+            logFlick.contentY = Math.max(0, logFlick.contentHeight - logFlick.height)
+        })
     }
 }
