@@ -151,6 +151,8 @@ EN_TRANSLATIONS = {
     "Забираю награду за испытание": "Claiming the challenge reward",
     "Работа завершена": "Finished",
     "Язык интерфейса изменён.": "Interface language changed.",
+    "Светлая тема включена.": "Light theme enabled.",
+    "Тёмная тема включена.": "Dark theme enabled.",
     "Не удалось сохранить язык интерфейса: ": "Could not save UI language: ",
     "Определяю целевой доход по уровню": "Detecting this level's target income",
     "Не удалось включить глобальные хоткеи: ": "Could not enable global hotkeys: ",
