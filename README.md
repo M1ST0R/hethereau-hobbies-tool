@@ -126,9 +126,8 @@ chmod +x start.sh
 
 | Action | Control |
 |---|---|
-| Start automation | `F6` |
-| Pause / resume | `F6` |
-| Stop automation | `F7` |
+| Start / pause | Selected key in **Settings** |
+| Stop automation | Selected key in **Settings** |
 | Emergency stop | Move the cursor to the top-left screen corner |
 | Change language | Language dropdown in the header |
 | Change appearance | Light / Dark switch in the header |
