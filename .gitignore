@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+app_config.json
+debug_*_capture.png
+*.log
