@@ -57,7 +57,12 @@ jobs:
         run: |
           $tesseractDir = "$env:ProgramFiles\Tesseract-OCR"
           if (!(Test-Path "$tesseractDir\tesseract.exe")) { throw "Tesseract was not found at $tesseractDir" }
-          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --name "HHT" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all svglib --collect-all reportlab --collect-all rlPyCairo --collect-all cairocffi --hidden-import cairo --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" hethereau_hobbies_tool.py
+          $iconArgs = @()
+          if (Test-Path "assets/app_icon.png") {
+            py -c "from PIL import Image; Image.open('assets/app_icon.png').convert('RGBA').save('assets/app_icon.ico', format='ICO', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+            $iconArgs = @("--icon", "assets/app_icon.ico")
+          }
+          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --name "HHT" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all svglib --collect-all reportlab --collect-all rlPyCairo --collect-all cairocffi --hidden-import cairo --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" @iconArgs hethereau_hobbies_tool.py
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item "dist\HHT.exe" "release\Hethereau-HHT-Windows-x64.exe"
 
@@ -73,7 +78,7 @@ jobs:
 
           mkdir -p release
           PACKAGE_ROOT="$RUNNER_TEMP/hht-deb"
-          install -d "$PACKAGE_ROOT/opt/hethereau-hobbies-tool" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/DEBIAN"
+          install -d "$PACKAGE_ROOT/opt/hethereau-hobbies-tool" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/usr/share/icons/hicolor/256x256/apps" "$PACKAGE_ROOT/DEBIAN"
           cp -a dist/HHT/. "$PACKAGE_ROOT/opt/hethereau-hobbies-tool/"
 
           cat > "$PACKAGE_ROOT/usr/bin/hht" <<'LAUNCHER'
@@ -82,12 +87,18 @@ jobs:
           LAUNCHER
           chmod 755 "$PACKAGE_ROOT/usr/bin/hht"
 
-          cat > "$PACKAGE_ROOT/usr/share/applications/hethereau-hobbies-tool.desktop" <<'DESKTOP'
+          ICON_ENTRY=""
+          if [[ -f assets/app_icon.png ]]; then
+            install -m 644 assets/app_icon.png "$PACKAGE_ROOT/usr/share/icons/hicolor/256x256/apps/hethereau-hobbies-tool.png"
+            ICON_ENTRY="Icon=hethereau-hobbies-tool"
+          fi
+          cat > "$PACKAGE_ROOT/usr/share/applications/hethereau-hobbies-tool.desktop" <<DESKTOP
           [Desktop Entry]
           Type=Application
           Name=Hethereau Hobbies Tool (HHT)
           Comment=Automation toolkit for NTE hobbies
           Exec=hht
+          $ICON_ENTRY
           Terminal=false
           Categories=Game;Utility;
           DESKTOP
