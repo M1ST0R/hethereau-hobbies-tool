@@ -31,13 +31,20 @@ def main() -> int:
     app.setOrganizationName("M1ST0R")
     app.setOrganizationDomain("github.com/M1ST0R")
 
-    # Prefer a clean native UI font without bundling font files. Qt will fall
-    # back to its platform default if the preferred family is unavailable.
+    # Load the bundled variable Montserrat font so the UI looks consistent
+    # on Windows and Linux even when Montserrat is not installed system-wide.
+    montserrat_path = resource_path(os.path.join("assets", "fonts", "Montserrat[wght].ttf"))
+    montserrat_id = QFontDatabase.addApplicationFont(montserrat_path) if os.path.isfile(montserrat_path) else -1
+    bundled_families = QFontDatabase.applicationFontFamilies(montserrat_id) if montserrat_id >= 0 else []
     installed_fonts = {family.casefold(): family for family in QFontDatabase.families()}
-    preferred_fonts = ("Segoe UI", "Inter", "Noto Sans", "Liberation Sans", "DejaVu Sans")
-    ui_font_family = next(
-        (installed_fonts[name.casefold()] for name in preferred_fonts if name.casefold() in installed_fonts),
-        QFont().defaultFamily(),
+    preferred_fonts = ("Montserrat", "Segoe UI", "Inter", "Noto Sans", "Liberation Sans", "DejaVu Sans")
+    ui_font_family = (
+        bundled_families[0]
+        if bundled_families
+        else next(
+            (installed_fonts[name.casefold()] for name in preferred_fonts if name.casefold() in installed_fonts),
+            QFont().defaultFamily(),
+        )
     )
     ui_font = QFont(ui_font_family)
     ui_font.setStyleStrategy(QFont.PreferAntialias)

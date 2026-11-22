@@ -44,8 +44,8 @@ ApplicationWindow {
     // This is the module registry. Add future hobbies here; each gets a page
     // in the StackLayout below without changing the common application shell.
     readonly property var moduleItems: [
-        { id: "owner", ru: "Подборка владельца", en: "Owner's Selection", icon: "sports_esports", glyph: "01", ready: true },
-        { id: "fishing", ru: "Рыбалка", en: "Fishing", icon: "", glyph: "≈", ready: false }
+        { id: "owner", ru: "Подборка владельца", en: "Owner's Selection", icon: "sports_esports", ready: true },
+        { id: "fishing", ru: "Рыбалка", en: "Fishing", icon: "waves", ready: false }
     ]
 
     function tr(ru, en) {
@@ -156,7 +156,7 @@ ApplicationWindow {
                 Text {
                     text: "HETHEREAU"
                     color: root.accentBright
-                    font.pixelSize: 9
+                    font.pixelSize: 12
                     font.bold: true
                     font.letterSpacing: 1.1
                 }
@@ -164,7 +164,7 @@ ApplicationWindow {
                 Text {
                     text: "HOBBIES TOOL"
                     color: root.textColor
-                    font.pixelSize: 9
+                    font.pixelSize: 12
                     font.bold: true
                     font.letterSpacing: 0.5
                 }
@@ -180,7 +180,7 @@ ApplicationWindow {
                 Text {
                     text: root.pageTitle()
                     color: root.mutedColor
-                    font.pixelSize: 9
+                    font.pixelSize: 12
                     elide: Text.ElideRight
                     Layout.maximumWidth: 260
                 }
@@ -199,12 +199,11 @@ ApplicationWindow {
                         radius: 7
                         color: minimizeWindowButton.hovered ? root.panelAlt : "transparent"
                     }
-                    contentItem: Text {
-                        text: "—"
-                        color: root.mutedColor
-                        font.pixelSize: 15
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Image {
+                        source: root.iconPath("minimize")
+                        sourceSize: Qt.size(18, 18)
+                        width: 18
+                        height: 18
                     }
                 }
 
@@ -222,12 +221,11 @@ ApplicationWindow {
                         radius: 7
                         color: maximizeWindowButton.hovered ? root.panelAlt : "transparent"
                     }
-                    contentItem: Text {
-                        text: root.visibility === Window.Maximized ? "❐" : "□"
-                        color: root.mutedColor
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Image {
+                        source: root.iconPath(root.visibility === Window.Maximized ? "filter_none" : "crop_square")
+                        sourceSize: Qt.size(18, 18)
+                        width: 18
+                        height: 18
                     }
                 }
 
@@ -240,12 +238,11 @@ ApplicationWindow {
                         radius: 7
                         color: closeWindowButton.hovered ? "#C94C63" : "transparent"
                     }
-                    contentItem: Text {
-                        text: "×"
-                        color: closeWindowButton.hovered ? "#FFFFFF" : root.mutedColor
-                        font.pixelSize: 20
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Image {
+                        source: root.iconPath("close")
+                        sourceSize: Qt.size(18, 18)
+                        width: 18
+                        height: 18
                     }
                 }
             }
@@ -297,21 +294,21 @@ ApplicationWindow {
                         Text {
                             text: "HETHEREAU"
                             color: accentBright
-                            font.pixelSize: 10
+                            font.pixelSize: 13
                             font.bold: true
                             font.letterSpacing: 2.0
                         }
                         Text {
                             text: "HOBBIES TOOL"
                             color: textColor
-                            font.pixelSize: 13
+                            font.pixelSize: 16
                             font.bold: true
                             font.letterSpacing: 0.8
                         }
                         Text {
                             text: "AUTOMATION HUB"
                             color: faintColor
-                            font.pixelSize: 8
+                            font.pixelSize: 11
                             font.letterSpacing: 1.5
                         }
                     }
@@ -320,7 +317,7 @@ ApplicationWindow {
                 Text {
                     text: tr("МОДУЛИ", "HOBBY MODULES")
                     color: faintColor
-                    font.pixelSize: 9
+                    font.pixelSize: 12
                     font.bold: true
                     font.letterSpacing: 1.6
                     Layout.leftMargin: 9
@@ -363,21 +360,10 @@ ApplicationWindow {
 
                                 Image {
                                     anchors.centerIn: parent
-                                    visible: moduleNav.modelData.icon !== ""
-                                    source: moduleNav.modelData.icon !== ""
-                                        ? root.iconPath(moduleNav.modelData.icon) : ""
-                                    sourceSize: Qt.size(18, 18)
-                                    width: 18
-                                    height: 18
-                                }
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    visible: moduleNav.modelData.icon === ""
-                                    text: moduleNav.modelData.glyph
-                                    color: cyan
-                                    font.pixelSize: 21
-                                    font.bold: true
+                                    source: root.iconPath(moduleNav.modelData.icon)
+                                    sourceSize: Qt.size(20, 20)
+                                    width: 20
+                                    height: 20
                                 }
                             }
 
@@ -387,7 +373,7 @@ ApplicationWindow {
                                 Text {
                                     text: root.tr(moduleNav.modelData.ru, moduleNav.modelData.en)
                                     color: moduleNav.selected ? accentBright : textColor
-                                    font.pixelSize: 11
+                                    font.pixelSize: 14
                                     font.bold: moduleNav.selected
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -397,7 +383,7 @@ ApplicationWindow {
                                         ? root.tr("Доступен", "Available")
                                         : root.tr("В разработке", "In development")
                                     color: moduleNav.modelData.ready ? green : faintColor
-                                    font.pixelSize: 9
+                                    font.pixelSize: 12
                                 }
                             }
 
@@ -411,7 +397,7 @@ ApplicationWindow {
                                     anchors.centerIn: parent
                                     text: "SOON"
                                     color: mutedColor
-                                    font.pixelSize: 7
+                                    font.pixelSize: 10
                                     font.bold: true
                                     font.letterSpacing: 0.5
                                 }
@@ -449,7 +435,7 @@ ApplicationWindow {
                 Text {
                     text: tr("ПРИЛОЖЕНИЕ", "WORKSPACE")
                     color: faintColor
-                    font.pixelSize: 9
+                    font.pixelSize: 12
                     font.bold: true
                     font.letterSpacing: 1.6
                     Layout.leftMargin: 9
@@ -458,9 +444,9 @@ ApplicationWindow {
 
                 Repeater {
                     model: [
-                        { id: "settings", ru: "Настройки", en: "Settings", icon: "", glyph: "⚙" },
-                        { id: "logs", ru: "Журнал событий", en: "Activity log", icon: "article", glyph: "" },
-                        { id: "about", ru: "О программе", en: "About", icon: "info", glyph: "" }
+                        { id: "settings", ru: "Настройки", en: "Settings", icon: "settings" },
+                        { id: "logs", ru: "Журнал событий", en: "Activity log", icon: "article" },
+                        { id: "about", ru: "О программе", en: "About", icon: "info" }
                     ]
 
                     delegate: Rectangle {
@@ -488,17 +474,9 @@ ApplicationWindow {
                                 opacity: toolNav.selected ? 1.0 : 0.72
                             }
                             Text {
-                                visible: toolNav.modelData.icon === ""
-                                text: toolNav.modelData.glyph
-                                color: toolNav.selected ? accentBright : mutedColor
-                                font.pixelSize: 17
-                                Layout.preferredWidth: 18
-                                horizontalAlignment: Text.AlignHCenter
-                            }
-                            Text {
                                 text: root.tr(toolNav.modelData.ru, toolNav.modelData.en)
                                 color: toolNav.selected ? textColor : mutedColor
-                                font.pixelSize: 11
+                                font.pixelSize: 14
                                 font.bold: toolNav.selected
                                 Layout.fillWidth: true
                             }
@@ -544,7 +522,7 @@ ApplicationWindow {
                                     ? root.tr("Игра подключена", "Game connected")
                                     : root.tr("Ожидание игры", "Waiting for game")
                                 color: textColor
-                                font.pixelSize: 10
+                                font.pixelSize: 13
                                 font.bold: true
                                 Layout.fillWidth: true
                             }
@@ -552,7 +530,7 @@ ApplicationWindow {
                         Text {
                             text: "v" + backend.version + "  ·  " + backend.channel.toUpperCase()
                             color: faintColor
-                            font.pixelSize: 9
+                            font.pixelSize: 12
                         }
                     }
                 }
@@ -584,14 +562,14 @@ ApplicationWindow {
                     Text {
                         text: root.pageTitle()
                         color: textColor
-                        font.pixelSize: 25
+                        font.pixelSize: 28
                         font.bold: true
                         font.letterSpacing: -0.3
                     }
                     Text {
                         text: root.pageSubtitle()
                         color: mutedColor
-                        font.pixelSize: 11
+                        font.pixelSize: 14
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
@@ -617,7 +595,7 @@ ApplicationWindow {
                     contentItem: Text {
                         text: languageButton.text
                         color: textColor
-                        font.pixelSize: 10
+                        font.pixelSize: 13
                         font.bold: true
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -628,19 +606,17 @@ ApplicationWindow {
                     id: themeButton
                     Layout.preferredWidth: 42
                     Layout.preferredHeight: 38
-                    text: root.darkMode ? "☼" : "☾"
                     onClicked: backend.setTheme(root.darkMode ? "light" : "dark")
                     background: Rectangle {
                         radius: 11
                         color: themeButton.hovered ? panelAlt : panel
                         border.color: borderColor
                     }
-                    contentItem: Text {
-                        text: themeButton.text
-                        color: accentBright
-                        font.pixelSize: 18
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: Image {
+                        source: root.iconPath(root.darkMode ? "light_mode" : "dark_mode")
+                        sourceSize: Qt.size(20, 20)
+                        width: 20
+                        height: 20
                     }
                 }
             }
@@ -779,7 +755,7 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             text: "MODULE 01   /   EVENT AUTOMATION"
                                             color: "#E7E9FF"
-                                            font.pixelSize: 8
+                                            font.pixelSize: 11
                                             font.bold: true
                                             font.letterSpacing: 1.2
                                         }
@@ -788,7 +764,7 @@ ApplicationWindow {
                                     Text {
                                         text: root.tr("Подборка владельца", "Owner's Selection")
                                         color: "#FFFFFF"
-                                        font.pixelSize: 24
+                                        font.pixelSize: 26
                                         font.bold: true
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
@@ -800,7 +776,7 @@ ApplicationWindow {
                                             "Automate the event, monitor resources and repeat gameplay cycles."
                                         )
                                         color: "#D9E3FF"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 13
                                         wrapMode: Text.WordWrap
                                         lineHeightMode: Text.ProportionalHeight
                                         lineHeight: 1.2
@@ -821,7 +797,7 @@ ApplicationWindow {
                                                 ? root.tr("ИГРА ОБНАРУЖЕНА", "GAME DETECTED")
                                                 : root.tr("ОЖИДАНИЕ ИГРЫ", "WAITING FOR GAME")
                                             color: "#E5F5FF"
-                                            font.pixelSize: 8
+                                            font.pixelSize: 11
                                             font.bold: true
                                             font.letterSpacing: 1.1
                                         }
@@ -849,7 +825,7 @@ ApplicationWindow {
                                         Text {
                                             text: root.tr("СОСТОЯНИЕ АВТОМАТИЗАЦИИ", "AUTOMATION STATUS")
                                             color: faintColor
-                                            font.pixelSize: 8
+                                            font.pixelSize: 11
                                             font.bold: true
                                             font.letterSpacing: 1.4
                                         }
@@ -865,7 +841,7 @@ ApplicationWindow {
                                             Text {
                                                 text: backend.status
                                                 color: backend.paused ? amber : (backend.running ? green : textColor)
-                                                font.pixelSize: 12
+                                                font.pixelSize: 15
                                                 font.bold: true
                                                 Layout.fillWidth: true
                                                 elide: Text.ElideRight
@@ -875,7 +851,7 @@ ApplicationWindow {
                                         Text {
                                             text: backend.stage
                                             color: mutedColor
-                                            font.pixelSize: 10
+                                            font.pixelSize: 13
                                             wrapMode: Text.WordWrap
                                             maximumLineCount: 2
                                             elide: Text.ElideRight
@@ -912,17 +888,17 @@ ApplicationWindow {
                                             contentItem: Row {
                                                 anchors.centerIn: parent
                                                 spacing: 9
-                                                Text {
-                                                    text: backend.running && !backend.paused ? "Ⅱ" : "▶"
-                                                    color: "#FFFFFF"
-                                                    font.pixelSize: 15
-                                                    font.bold: true
+                                                Image {
+                                                    source: root.iconPath(backend.running && !backend.paused ? "pause" : "play_arrow")
+                                                    sourceSize: Qt.size(18, 18)
+                                                    width: 18
+                                                    height: 18
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                                 Text {
                                                     text: runButton.text
                                                     color: "#FFFFFF"
-                                                    font.pixelSize: 10
+                                                    font.pixelSize: 13
                                                     font.bold: true
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
@@ -943,16 +919,17 @@ ApplicationWindow {
                                             contentItem: Row {
                                                 anchors.centerIn: parent
                                                 spacing: 8
-                                                Text {
-                                                    text: "■"
-                                                    color: red
-                                                    font.pixelSize: 10
+                                                Image {
+                                                    source: root.iconPath("stop")
+                                                    sourceSize: Qt.size(16, 16)
+                                                    width: 16
+                                                    height: 16
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
                                                 Text {
                                                     text: stopButton.text
                                                     color: red
-                                                    font.pixelSize: 9
+                                                    font.pixelSize: 12
                                                     font.bold: true
                                                     anchors.verticalCenter: parent.verticalCenter
                                                 }
@@ -969,9 +946,9 @@ ApplicationWindow {
 
                                 Repeater {
                                     model: [
-                                        { key: "cycles", ru: "ЦИКЛЫ", en: "CYCLES", subRu: "Завершено", subEn: "Completed", glyph: "↻", tone: "accent" },
-                                        { key: "energy", ru: "ЭНЕРГИЯ", en: "ENERGY", subRu: "Текущий запас", subEn: "Current reserve", glyph: "ϟ", tone: "green" },
-                                        { key: "income", ru: "ДОХОД", en: "INCOME", subRu: "Цель уровня", subEn: "Level target", glyph: "↗", tone: "amber" }
+                                        { key: "cycles", ru: "ЦИКЛЫ", en: "CYCLES", subRu: "Завершено", subEn: "Completed", icon: "history", tone: "accent" },
+                                        { key: "energy", ru: "ЭНЕРГИЯ", en: "ENERGY", subRu: "Текущий запас", subEn: "Current reserve", icon: "bolt", tone: "green" },
+                                        { key: "income", ru: "ДОХОД", en: "INCOME", subRu: "Цель уровня", subEn: "Level target", icon: "monitoring", tone: "amber" }
                                     ]
 
                                     delegate: Rectangle {
@@ -993,16 +970,16 @@ ApplicationWindow {
                                                 Text {
                                                     text: root.tr(modelData.ru, modelData.en)
                                                     color: mutedColor
-                                                    font.pixelSize: 8
+                                                    font.pixelSize: 11
                                                     font.bold: true
                                                     font.letterSpacing: 1.0
                                                 }
                                                 Item { Layout.fillWidth: true }
-                                                Text {
-                                                    text: modelData.glyph
-                                                    color: modelData.tone === "green" ? green : (modelData.tone === "amber" ? amber : accentBright)
-                                                    font.pixelSize: 18
-                                                    font.bold: true
+                                                Image {
+                                                    source: root.iconPath(modelData.icon)
+                                                    sourceSize: Qt.size(20, 20)
+                                                    width: 20
+                                                    height: 20
                                                 }
                                             }
 
@@ -1011,7 +988,7 @@ ApplicationWindow {
                                                     : (modelData.key === "energy" ? backend.energy : backend.income)
                                                 color: modelData.tone === "green" ? green
                                                     : (modelData.tone === "amber" ? amber : accentBright)
-                                                font.pixelSize: 22
+                                                font.pixelSize: 24
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                                 Layout.fillWidth: true
@@ -1020,7 +997,7 @@ ApplicationWindow {
                                             Text {
                                                 text: root.tr(modelData.subRu, modelData.subEn)
                                                 color: faintColor
-                                                font.pixelSize: 9
+                                                font.pixelSize: 12
                                             }
                                         }
                                     }
@@ -1065,14 +1042,14 @@ ApplicationWindow {
                                             Text {
                                                 text: root.tr("ИГРОВОЕ ОКНО", "GAME WINDOW")
                                                 color: faintColor
-                                                font.pixelSize: 8
+                                                font.pixelSize: 11
                                                 font.bold: true
                                                 font.letterSpacing: 1.0
                                             }
                                             Text {
                                                 text: backend.windowStatus
                                                 color: textColor
-                                                font.pixelSize: 10
+                                                font.pixelSize: 13
                                                 font.bold: true
                                                 elide: Text.ElideRight
                                                 Layout.fillWidth: true
@@ -1082,7 +1059,7 @@ ApplicationWindow {
                                                     ? root.tr("Подключение активно", "Connection active")
                                                     : root.tr("Проверь, что игра запущена", "Make sure the game is running")
                                                 color: backend.gameConnected ? green : amber
-                                                font.pixelSize: 8
+                                                font.pixelSize: 11
                                             }
                                         }
 
@@ -1123,12 +1100,12 @@ ApplicationWindow {
                                             height: 36
                                             radius: 11
                                             color: root.darkMode ? "#28304A" : "#EEEAFE"
-                                            Text {
+                                            Image {
                                                 anchors.centerIn: parent
-                                                text: "⌕"
-                                                color: accentBright
-                                                font.pixelSize: 23
-                                                font.bold: true
+                                                source: root.iconPath("document_scanner")
+                                                sourceSize: Qt.size(23, 23)
+                                                width: 23
+                                                height: 23
                                             }
                                         }
                                         ColumnLayout {
@@ -1137,20 +1114,20 @@ ApplicationWindow {
                                             Text {
                                                 text: root.tr("ДИАГНОСТИКА", "DIAGNOSTICS")
                                                 color: faintColor
-                                                font.pixelSize: 8
+                                                font.pixelSize: 11
                                                 font.bold: true
                                                 font.letterSpacing: 1.0
                                             }
                                             Text {
                                                 text: root.tr("Проверить OCR", "Verify OCR")
                                                 color: textColor
-                                                font.pixelSize: 10
+                                                font.pixelSize: 13
                                                 font.bold: true
                                             }
                                             Text {
                                                 text: root.tr("Энергия и доход", "Energy and income")
                                                 color: mutedColor
-                                                font.pixelSize: 8
+                                                font.pixelSize: 11
                                             }
                                         }
                                         Button {
@@ -1167,7 +1144,7 @@ ApplicationWindow {
                                             contentItem: Text {
                                                 text: scanButton.text
                                                 color: accentBright
-                                                font.pixelSize: 9
+                                                font.pixelSize: 12
                                                 font.bold: true
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
@@ -1228,17 +1205,15 @@ ApplicationWindow {
                                     border.color: "#35FFFFFF"
                                     border.width: 1
                                 }
-                                Text {
+                                Image {
                                     x: parent.width - 175
                                     y: 35
                                     width: 130
                                     height: 130
-                                    text: "≈"
-                                    color: "#8CE8E1"
-                                    font.pixelSize: 126
-                                    font.bold: true
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
+                                    source: root.iconPath("waves")
+                                    sourceSize: Qt.size(130, 130)
+                                    fillMode: Image.PreserveAspectFit
+                                    smooth: true
                                     opacity: 0.9
                                 }
 
@@ -1253,14 +1228,14 @@ ApplicationWindow {
                                     Text {
                                         text: "MODULE 02   /   FIELD AUTOMATION"
                                         color: "#D5F4F2"
-                                        font.pixelSize: 8
+                                        font.pixelSize: 11
                                         font.bold: true
                                         font.letterSpacing: 1.5
                                     }
                                     Text {
                                         text: root.tr("Рыбалка", "Fishing")
                                         color: "#FFFFFF"
-                                        font.pixelSize: 31
+                                        font.pixelSize: 34
                                         font.bold: true
                                     }
                                     Text {
@@ -1269,7 +1244,7 @@ ApplicationWindow {
                                             "The new module will live here. The shared shell, settings and activity log are ready to grow."
                                         )
                                         color: "#D8E9F7"
-                                        font.pixelSize: 11
+                                        font.pixelSize: 14
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
@@ -1284,7 +1259,7 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             text: root.tr("В РАЗРАБОТКЕ", "IN DEVELOPMENT")
                                             color: "#FFFFFF"
-                                            font.pixelSize: 8
+                                            font.pixelSize: 11
                                             font.bold: true
                                             font.letterSpacing: 1.1
                                         }
@@ -1309,11 +1284,12 @@ ApplicationWindow {
                                         height: 43
                                         radius: 13
                                         color: panelAlt
-                                        Text {
+                                        Image {
                                             anchors.centerIn: parent
-                                            text: "✦"
-                                            color: cyan
-                                            font.pixelSize: 22
+                                            source: root.iconPath("auto_awesome")
+                                            sourceSize: Qt.size(24, 24)
+                                            width: 24
+                                            height: 24
                                         }
                                     }
 
@@ -1323,7 +1299,7 @@ ApplicationWindow {
                                         Text {
                                             text: root.tr("Модульная структура", "Modular architecture")
                                             color: textColor
-                                            font.pixelSize: 13
+                                            font.pixelSize: 16
                                             font.bold: true
                                         }
                                         Text {
@@ -1332,7 +1308,7 @@ ApplicationWindow {
                                                 "Fishing will be added as an independent hobby with its own logic, settings and state — without reshaping the other sections."
                                             )
                                             color: mutedColor
-                                            font.pixelSize: 10
+                                            font.pixelSize: 13
                                             wrapMode: Text.WordWrap
                                             Layout.fillWidth: true
                                         }
@@ -1352,7 +1328,7 @@ ApplicationWindow {
                                     Text {
                                         text: "01"
                                         color: accentBright
-                                        font.pixelSize: 22
+                                        font.pixelSize: 24
                                         font.bold: true
                                     }
                                     ColumnLayout {
@@ -1361,13 +1337,13 @@ ApplicationWindow {
                                         Text {
                                             text: root.tr("Подборка владельца", "Owner's Selection")
                                             color: textColor
-                                            font.pixelSize: 11
+                                            font.pixelSize: 14
                                             font.bold: true
                                         }
                                         Text {
                                             text: root.tr("Уже доступна и работает независимо от будущих модулей.", "Available now and independent from future modules.")
                                             color: mutedColor
-                                            font.pixelSize: 9
+                                            font.pixelSize: 12
                                             wrapMode: Text.WordWrap
                                             Layout.fillWidth: true
                                         }
@@ -1384,7 +1360,7 @@ ApplicationWindow {
                                         contentItem: Text {
                                             text: ownerJumpButton.text
                                             color: accentBright
-                                            font.pixelSize: 9
+                                            font.pixelSize: 12
                                             font.bold: true
                                             horizontalAlignment: Text.AlignHCenter
                                             verticalAlignment: Text.AlignVCenter
@@ -1428,11 +1404,12 @@ ApplicationWindow {
                                         Layout.preferredHeight: 43
                                         radius: 13
                                         color: root.darkMode ? "#302A50" : "#EFEDFF"
-                                        Text {
+                                        Image {
                                             anchors.centerIn: parent
-                                            text: "⚙"
-                                            color: accentBright
-                                            font.pixelSize: 24
+                                            source: root.iconPath("settings")
+                                            sourceSize: Qt.size(25, 25)
+                                            width: 25
+                                            height: 25
                                         }
                                     }
                                     ColumnLayout {
@@ -1441,7 +1418,7 @@ ApplicationWindow {
                                         Text {
                                             text: root.tr("Управление приложением", "Application controls")
                                             color: textColor
-                                            font.pixelSize: 14
+                                            font.pixelSize: 17
                                             font.bold: true
                                         }
                                         Text {
@@ -1450,7 +1427,7 @@ ApplicationWindow {
                                                 "Configure global start and stop keys. Your choices are saved between sessions."
                                             )
                                             color: mutedColor
-                                            font.pixelSize: 10
+                                            font.pixelSize: 13
                                             wrapMode: Text.WordWrap
                                             Layout.fillWidth: true
                                         }
@@ -1474,7 +1451,7 @@ ApplicationWindow {
                                     Text {
                                         text: root.tr("ГЛОБАЛЬНЫЕ ГОРЯЧИЕ КЛАВИШИ", "GLOBAL SHORTCUTS")
                                         color: faintColor
-                                        font.pixelSize: 8
+                                        font.pixelSize: 11
                                         font.bold: true
                                         font.letterSpacing: 1.3
                                     }
@@ -1488,13 +1465,13 @@ ApplicationWindow {
                                             Text {
                                                 text: root.tr("Запуск / пауза", "Start / pause")
                                                 color: textColor
-                                                font.pixelSize: 11
+                                                font.pixelSize: 14
                                                 font.bold: true
                                             }
                                             Text {
                                                 text: root.tr("Переключает выполнение автоматизации", "Toggles automation")
                                                 color: mutedColor
-                                                font.pixelSize: 9
+                                                font.pixelSize: 12
                                             }
                                         }
 
@@ -1513,7 +1490,7 @@ ApplicationWindow {
                                                 leftPadding: 10
                                                 text: toggleHotkeyBox.displayText
                                                 color: textColor
-                                                font.pixelSize: 10
+                                                font.pixelSize: 13
                                                 verticalAlignment: Text.AlignVCenter
                                             }
                                         }
@@ -1534,13 +1511,13 @@ ApplicationWindow {
                                             Text {
                                                 text: root.tr("Остановка", "Stop")
                                                 color: textColor
-                                                font.pixelSize: 11
+                                                font.pixelSize: 14
                                                 font.bold: true
                                             }
                                             Text {
                                                 text: root.tr("Прекращает ввод и завершает цикл", "Stops input and ends the cycle")
                                                 color: mutedColor
-                                                font.pixelSize: 9
+                                                font.pixelSize: 12
                                             }
                                         }
 
@@ -1559,7 +1536,7 @@ ApplicationWindow {
                                                 leftPadding: 10
                                                 text: stopHotkeyBox.displayText
                                                 color: textColor
-                                                font.pixelSize: 10
+                                                font.pixelSize: 13
                                                 verticalAlignment: Text.AlignVCenter
                                             }
                                         }
@@ -1580,7 +1557,7 @@ ApplicationWindow {
                                             contentItem: Text {
                                                 text: resetHotkeysButton.text
                                                 color: mutedColor
-                                                font.pixelSize: 9
+                                                font.pixelSize: 12
                                                 horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
                                             }
@@ -1593,7 +1570,7 @@ ApplicationWindow {
                                             "Choose any two different function keys from F1–F12. Changes apply immediately."
                                         )
                                         color: faintColor
-                                        font.pixelSize: 9
+                                        font.pixelSize: 12
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
@@ -1613,7 +1590,7 @@ ApplicationWindow {
                                     Text {
                                         text: root.tr("ВНЕШНИЙ ВИД", "APPEARANCE")
                                         color: faintColor
-                                        font.pixelSize: 8
+                                        font.pixelSize: 11
                                         font.bold: true
                                         font.letterSpacing: 1.2
                                     }
@@ -1623,7 +1600,7 @@ ApplicationWindow {
                                             "Change the interface theme and language from the top bar. Both are saved automatically."
                                         )
                                         color: textColor
-                                        font.pixelSize: 10
+                                        font.pixelSize: 13
                                         wrapMode: Text.WordWrap
                                         Layout.fillWidth: true
                                     }
@@ -1673,14 +1650,14 @@ ApplicationWindow {
                                         Text {
                                             text: "HETHEREAU HOBBIES TOOL"
                                             color: accentBright
-                                            font.pixelSize: 9
+                                            font.pixelSize: 12
                                             font.bold: true
                                             font.letterSpacing: 1.6
                                         }
                                         Text {
                                             text: "Hethereau Hobbies Tool"
                                             color: textColor
-                                            font.pixelSize: 25
+                                            font.pixelSize: 28
                                             font.bold: true
                                             wrapMode: Text.WordWrap
                                             Layout.fillWidth: true
@@ -1688,7 +1665,7 @@ ApplicationWindow {
                                         Text {
                                             text: "v" + backend.version + "  ·  " + backend.channel.toUpperCase()
                                             color: mutedColor
-                                            font.pixelSize: 10
+                                            font.pixelSize: 13
                                         }
                                     }
                                 }
@@ -1705,7 +1682,7 @@ ApplicationWindow {
                                         "A unified workspace for automating hobbies in Neverness to Everness. Each module handles a separate activity while settings, navigation and diagnostics remain shared."
                                     )
                                     color: textColor
-                                    font.pixelSize: 12
+                                    font.pixelSize: 15
                                     wrapMode: Text.WordWrap
                                     lineHeightMode: Text.ProportionalHeight
                                     lineHeight: 1.3
@@ -1726,21 +1703,21 @@ ApplicationWindow {
 
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: root.tr("Интерфейс", "Interface"); color: mutedColor; font.pixelSize: 10 }
+                                            Text { text: root.tr("Интерфейс", "Interface"); color: mutedColor; font.pixelSize: 13 }
                                             Item { Layout.fillWidth: true }
-                                            Text { text: "PySide6 + Qt Quick / QML"; color: textColor; font.pixelSize: 10; font.bold: true }
+                                            Text { text: "PySide6 + Qt Quick / QML"; color: textColor; font.pixelSize: 13; font.bold: true }
                                         }
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: root.tr("Игровой процесс", "Game process"); color: mutedColor; font.pixelSize: 10 }
+                                            Text { text: root.tr("Игровой процесс", "Game process"); color: mutedColor; font.pixelSize: 13 }
                                             Item { Layout.fillWidth: true }
-                                            Text { text: "HTGame.exe"; color: textColor; font.pixelSize: 10; font.bold: true }
+                                            Text { text: "HTGame.exe"; color: textColor; font.pixelSize: 13; font.bold: true }
                                         }
                                         RowLayout {
                                             Layout.fillWidth: true
-                                            Text { text: root.tr("Доступные модули", "Available modules"); color: mutedColor; font.pixelSize: 10 }
+                                            Text { text: root.tr("Доступные модули", "Available modules"); color: mutedColor; font.pixelSize: 13 }
                                             Item { Layout.fillWidth: true }
-                                            Text { text: "1 / 2"; color: textColor; font.pixelSize: 10; font.bold: true }
+                                            Text { text: "1 / 2"; color: textColor; font.pixelSize: 13; font.bold: true }
                                         }
                                     }
                                 }
@@ -1758,9 +1735,9 @@ ApplicationWindow {
                                             anchors.fill: parent
                                             anchors.margins: 12
                                             spacing: 4
-                                            Text { text: "01"; color: accentBright; font.pixelSize: 15; font.bold: true }
-                                            Text { text: root.tr("Подборка владельца", "Owner's Selection"); color: textColor; font.pixelSize: 9; font.bold: true }
-                                            Text { text: root.tr("Доступен", "Available"); color: green; font.pixelSize: 8 }
+                                            Text { text: "01"; color: accentBright; font.pixelSize: 18; font.bold: true }
+                                            Text { text: root.tr("Подборка владельца", "Owner's Selection"); color: textColor; font.pixelSize: 12; font.bold: true }
+                                            Text { text: root.tr("Доступен", "Available"); color: green; font.pixelSize: 11 }
                                         }
                                     }
                                     Rectangle {
@@ -1773,9 +1750,9 @@ ApplicationWindow {
                                             anchors.fill: parent
                                             anchors.margins: 12
                                             spacing: 4
-                                            Text { text: "02"; color: cyan; font.pixelSize: 15; font.bold: true }
-                                            Text { text: root.tr("Рыбалка", "Fishing"); color: textColor; font.pixelSize: 9; font.bold: true }
-                                            Text { text: root.tr("В разработке", "In development"); color: mutedColor; font.pixelSize: 8 }
+                                            Text { text: "02"; color: cyan; font.pixelSize: 18; font.bold: true }
+                                            Text { text: root.tr("Рыбалка", "Fishing"); color: textColor; font.pixelSize: 12; font.bold: true }
+                                            Text { text: root.tr("В разработке", "In development"); color: mutedColor; font.pixelSize: 11 }
                                         }
                                     }
                                 }
@@ -1793,7 +1770,7 @@ ApplicationWindow {
                                     contentItem: Text {
                                         text: githubButton.text
                                         color: "#FFFFFF"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 13
                                         font.bold: true
                                         horizontalAlignment: Text.AlignHCenter
                                         verticalAlignment: Text.AlignVCenter
@@ -1820,14 +1797,14 @@ ApplicationWindow {
                                 Text {
                                     text: root.tr("Диагностика и события", "Diagnostics and events")
                                     color: textColor
-                                    font.pixelSize: 15
+                                    font.pixelSize: 18
                                     font.bold: true
                                 }
                                 Text {
                                     id: logsCount
                                     text: root.tr(backend.logCount + " записей", backend.logCount + " entries")
                                     color: mutedColor
-                                    font.pixelSize: 9
+                                    font.pixelSize: 12
                                 }
                             }
                             Item { Layout.fillWidth: true }
@@ -1844,7 +1821,7 @@ ApplicationWindow {
                                 contentItem: Text {
                                     text: copyLogsButton.text
                                     color: textColor
-                                    font.pixelSize: 9
+                                    font.pixelSize: 12
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -1862,7 +1839,7 @@ ApplicationWindow {
                                 contentItem: Text {
                                     text: clearLogsButton.text
                                     color: red
-                                    font.pixelSize: 9
+                                    font.pixelSize: 12
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
@@ -1918,7 +1895,7 @@ ApplicationWindow {
                                         selectedTextColor: "#FFFFFF"
                                         selectionColor: accent
                                         font.family: "Consolas"
-                                        font.pixelSize: 10
+                                        font.pixelSize: 11
                                         background: null
                                         padding: 3
                                     }
@@ -1933,7 +1910,7 @@ ApplicationWindow {
                         Text {
                             text: root.tr("Выдели фрагмент журнала и нажми Ctrl+C, чтобы скопировать его.", "Select part of the log and press Ctrl+C to copy it.")
                             color: faintColor
-                            font.pixelSize: 9
+                            font.pixelSize: 12
                         }
                     }
                 }

@@ -306,7 +306,8 @@ SYMBOL_NAMES = {
     "info", "monitoring", "bolt", "payments", "check_circle", "warning",
     "error", "keyboard", "history", "fact_check", "dark_mode", "light_mode",
     "article", "open_in_new", "close", "sports_esports", "folder_open",
-    "copy_all", "delete", "check",
+    "copy_all", "delete", "check", "settings", "minimize", "crop_square",
+    "filter_none", "waves", "auto_awesome", "document_scanner",
 }
 
 # (light-mode tint, dark-mode tint); one consistent Outlined icon family.
