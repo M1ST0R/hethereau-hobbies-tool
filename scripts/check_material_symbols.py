@@ -7,7 +7,7 @@ import io
 import json
 from pathlib import Path
 
-import cairosvg
+import resvg_py
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,10 +21,10 @@ def main() -> None:
 
     for name, svg in icons.items():
         try:
-            png = cairosvg.svg2png(
-                bytestring=svg.encode("utf-8"),
-                output_width=RENDER_SIZE,
-                output_height=RENDER_SIZE,
+            png = resvg_py.svg_to_bytes(
+                svg_string=svg,
+                width=RENDER_SIZE,
+                height=RENDER_SIZE,
             )
             image = Image.open(io.BytesIO(png)).convert("RGBA")
             alpha = image.getchannel("A")
