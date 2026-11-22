@@ -1583,11 +1583,10 @@ class OwnerSelectionApp:
             target = expected_max
             votes = 2  # Previously confirmed for this running event.
 
-        # With a confirmed denominator, the numerator needs only two quick
-        # independent passes. On the first read, use one extra PSM as a fallback.
-        current_psms = (7,) if expected_max is not None else (7, 8)
+        # Multiple segmentation modes help retain leading digits. These passes
+        # run in the background, so they do not interrupt hammer clicks.
         current_candidates = read_digits(
-            yellow_mask, scales=(3, 4), psms=current_psms
+            yellow_mask, scales=(3, 4), psms=(6, 7, 8)
         )
         valid_current = [value for value, _ in current_candidates if 0 <= value <= target]
         if not valid_current:
@@ -1725,10 +1724,13 @@ class OwnerSelectionApp:
                 income_result = None
 
                 def read_income_background(target, output):
+                    started = time.perf_counter()
                     try:
                         output["result"] = self.read_income(expected_max=target)
                     except Exception as exc:
                         output["error"] = exc
+                    finally:
+                        output["elapsed_ms"] = (time.perf_counter() - started) * 1000
 
                 while not self.stop_event.is_set():
                     while self.pause_event.is_set() and not self.stop_event.is_set():
@@ -1762,6 +1764,9 @@ class OwnerSelectionApp:
                         and income_result is not None
                         and ("result" in income_result or "error" in income_result)
                     ):
+                        ocr_duration_ms = income_result.get("elapsed_ms", 0.0)
+                        if ocr_duration_ms >= 750:
+                            self.log(f"Распознавание дохода заняло {ocr_duration_ms:.0f} мс.")
                         if "error" in income_result:
                             current, maximum = None, None
                             raw = f"OCR error: {income_result['error']}"
