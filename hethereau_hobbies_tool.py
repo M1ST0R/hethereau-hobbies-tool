@@ -19,7 +19,7 @@ import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab, ImageTk
 import resvg_py
-from hht_ocr import select_ratio_candidate
+from hht_ocr import parse_ratio_text, select_ratio_candidate
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -399,6 +399,8 @@ class OwnerSelectionApp:
 
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
+        self._state_scan_lock = threading.RLock()
+        self._known_energy_max: int | None = None
         self.worker_thread: threading.Thread | None = None
         self.active_income_ocr_thread: threading.Thread | None = None
         self.hotkey_listener = None
@@ -421,6 +423,8 @@ class OwnerSelectionApp:
         self._stop_scan_pending = False
         self.worker_error: tuple[str, str] | None = None
         self.last_scan_error = ""
+        self._state_scan_lock = threading.RLock()
+        self._known_energy_max: int | None = None
 
         self.metric_labels: dict[str, ctk.CTkLabel] = {}
         self._build_ui()
@@ -1261,6 +1265,7 @@ class OwnerSelectionApp:
         self.last_resume_scan = None
         self.worker_error = None
         self.cycle_count = 0
+        self._known_energy_max = None
         self.set_metric("cycles", "0")
         self.set_status(
             "ЗАПУСК",
@@ -1774,14 +1779,7 @@ class OwnerSelectionApp:
             if not raw:
                 continue
 
-            compact = re.sub(r"[^0-9/]", "", raw)
-            for match in re.finditer(r"(\d{1,6})/(\d{1,6})", compact):
-                current, maximum = int(match.group(1)), int(match.group(2))
-                if maximum < min_max or maximum <= 0 or current > maximum:
-                    continue
-                if expected_max is not None and maximum != expected_max:
-                    continue
-                parsed.append((current, maximum, raw))
+            parsed.extend(parse_ratio_text(raw, expected_max=expected_max, min_max=min_max))
 
         if not parsed:
             return (
@@ -1976,13 +1974,34 @@ class OwnerSelectionApp:
             self.set_metric("income", f"{current:,} / {maximum:,}")
         return current, maximum, raw
 
-    def read_energy(self):
-        current, maximum, raw = self._read_ratio(ENERGY_REGION, "energy")
+    def read_energy(self, expected_max: int | None = None):
+        if expected_max is None:
+            expected_max = self._known_energy_max
+        current, maximum, raw = self._read_ratio(
+            ENERGY_REGION, "energy", expected_max=expected_max
+        )
         if current is not None:
             self.set_metric("energy", f"{current} / {maximum}")
         return current, maximum, raw
 
     def _scan_game_state(
+        self,
+        *,
+        include_income: bool = True,
+        reason: str = "проверка состояния",
+        attempts: int = 3,
+        allow_when_stopped: bool = False,
+    ) -> dict | None:
+        """Serialize scans so manual and worker OCR cannot overlap."""
+        with self._state_scan_lock:
+            return self._scan_game_state_unlocked(
+                include_income=include_income,
+                reason=reason,
+                attempts=attempts,
+                allow_when_stopped=allow_when_stopped,
+            )
+
+    def _scan_game_state_unlocked(
         self,
         *,
         include_income: bool = True,
@@ -2007,7 +2026,9 @@ class OwnerSelectionApp:
 
             energy_a, energy_max_a, energy_raw_a = self.read_energy()
             time.sleep(0.22)
-            energy_b, energy_max_b, energy_raw_b = self.read_energy()
+            energy_b, energy_max_b, energy_raw_b = self.read_energy(
+                expected_max=energy_max_a or self._known_energy_max
+            )
             energy_ok = (
                 energy_a is not None and energy_b is not None
                 and energy_max_a is not None and energy_max_b is not None
@@ -2021,6 +2042,10 @@ class OwnerSelectionApp:
                 "income_max": None,
                 "reason": reason,
             }
+
+            if energy_ok:
+                # Cache the maximum only after two independent reads agree.
+                self._known_energy_max = energy_max_b
 
             income_ok = not include_income
             income_raw_a = income_raw_b = ""
@@ -2037,7 +2062,7 @@ class OwnerSelectionApp:
                 income_ok = (
                     income_a is not None and income_b is not None
                     and income_max_a is not None and income_max_b == income_max_a
-                    and income_b >= income_a
+                    and income_b == income_a
                 )
                 if income_ok:
                     scan["income"] = income_b
