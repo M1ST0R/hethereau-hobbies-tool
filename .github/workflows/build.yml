@@ -122,7 +122,7 @@ jobs:
           if [[ "$DEB_VERSION" == *-* ]]; then
             DEB_BASE="${VERSION%%-*}"
             DEB_SUFFIX="${VERSION#*-}"
-            DEB_TILDE="$(printf '\\176')"
+            DEB_TILDE="$(printf '\176')"
             DEB_VERSION="${DEB_BASE}${DEB_TILDE}${DEB_SUFFIX}"
           fi
 
