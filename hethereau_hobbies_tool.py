@@ -423,8 +423,6 @@ class OwnerSelectionApp:
         self._stop_scan_pending = False
         self.worker_error: tuple[str, str] | None = None
         self.last_scan_error = ""
-        self._state_scan_lock = threading.RLock()
-        self._known_energy_max: int | None = None
 
         self.metric_labels: dict[str, ctk.CTkLabel] = {}
         self._build_ui()
