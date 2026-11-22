@@ -409,6 +409,7 @@ class OwnerSelectionApp:
         self.cycle_count = 0
         self.last_ocr_meta = ""
         self.last_ocr_debug_path = ""
+        self.last_ocr_debug_paths = {}
         self.current_page = "owner"
         self.game_screen_context = "outside_event"
         self.rescan_requested = threading.Event()
@@ -546,6 +547,10 @@ class OwnerSelectionApp:
         try:
             preferences = self._read_preferences()
             preferences.update({"language": self.language, "theme": self.theme_mode})
+            if hasattr(self, "toggle_hotkey"):
+                preferences["toggle_hotkey"] = self.toggle_hotkey
+            if hasattr(self, "stop_hotkey"):
+                preferences["stop_hotkey"] = self.stop_hotkey
             with open(self._config_path(), "w", encoding="utf-8") as config_file:
                 json.dump(preferences, config_file, ensure_ascii=False, indent=2)
         except Exception as exc:
@@ -1686,11 +1691,11 @@ class OwnerSelectionApp:
         expected_max: int | None = None,
         min_max: int = 1,
     ) -> tuple[int | None, int | None, str]:
-        """Read a changing current/maximum counter using OCR consensus.
+        """Read a changing current/maximum counter from one independent capture.
 
-        A partial match such as 70/1 must not be accepted. The maximum is
-        static during one event, so it must be recognized consistently by at
-        least two independent preprocessing passes before the ratio is trusted.
+        Every successful complete ratio remains provisional: _scan_game_state()
+        confirms it against a second screenshot. Several preprocessing variants
+        handle low-contrast, tinted and antialiased in-game text.
         """
         client_image, hwnd, client_w, client_h = self._capture_client_image()
         x, y, width, height = region
@@ -1709,16 +1714,12 @@ class OwnerSelectionApp:
             return None, None, "пустая область захвата"
 
         try:
-            # Keep OCR diagnostics outside PyInstaller's temporary _MEIPASS
-            # directory so they remain available after a one-file EXE closes.
             debug_dir = os.path.dirname(self._config_path())
             os.makedirs(debug_dir, exist_ok=True)
-            debug_path = os.path.join(
-                debug_dir,
-                f"debug_{debug_name}_capture.png",
-            )
+            debug_path = os.path.join(debug_dir, f"debug_{debug_name}_capture.png")
             crop.save(debug_path)
             self.last_ocr_debug_path = debug_path
+            self.last_ocr_debug_paths[debug_name] = debug_path
         except Exception:
             self.last_ocr_debug_path = ""
 
@@ -1726,145 +1727,237 @@ class OwnerSelectionApp:
             return self._read_income_parts(crop, min_max=min_max, expected_max=expected_max)
 
         gray = ImageOps.autocontrast(crop.convert("L"))
+        threshold = gray.point(lambda value: 255 if value >= 135 else 0)
+        inverted = ImageOps.invert(threshold)
 
-        # Two independent passes are enough for the static energy fraction.
-        # Avoid spawning 13 Tesseract processes for every cycle check.
-        candidates = []
-        for scale, psm in ((3, 7), (4, 8)):
-            enlarged = gray.resize(
-                (gray.width * scale, gray.height * scale),
+        try:
+            if debug_dir:
+                gray.save(os.path.join(debug_dir, f"debug_{debug_name}_gray.png"))
+                threshold.save(os.path.join(debug_dir, f"debug_{debug_name}_threshold.png"))
+        except Exception:
+            pass
+
+        # PSM 6/7/8/11 cover a compact ratio, a single line and sparse text.
+        # A reversed binary pass also helps when the game uses dark digits on
+        # a bright translucent panel.
+        passes = (
+            (gray, 3, 7, "gray-3x-7"),
+            (gray, 4, 8, "gray-4x-8"),
+            (threshold, 4, 7, "threshold-4x-7"),
+            (threshold, 4, 11, "threshold-4x-11"),
+            (inverted, 4, 8, "inverse-4x-8"),
+        )
+        parsed: list[tuple[int, int, str]] = []
+        diagnostics: list[str] = []
+        config_base = (
+            "--oem 3 -c tessedit_char_whitelist=0123456789/ "
+            "-c load_system_dawg=0 -c load_freq_dawg=0"
+        )
+
+        for image, scale, psm, label in passes:
+            enlarged = image.resize(
+                (image.width * scale, image.height * scale),
                 Image.Resampling.LANCZOS,
             )
-            candidates.append((enlarged, psm))
-        threshold = gray.point(lambda value: 255 if value > 150 else 0)
-        candidates.append((threshold.resize(
-            (threshold.width * 3, threshold.height * 3), Image.Resampling.LANCZOS
-        ), 7))
+            try:
+                raw = pytesseract.image_to_string(
+                    enlarged,
+                    config=f"{config_base} --psm {psm}",
+                    timeout=1.8,
+                ).strip()
+            except Exception as exc:
+                diagnostics.append(f"{label}=ошибка {type(exc).__name__}")
+                continue
 
-        parsed: list[tuple[int, int, str]] = []
-        rejected: list[str] = []
-        for candidate, psm in candidates:
-            raw = pytesseract.image_to_string(
-                candidate,
-                config=(
-                    f"--oem 3 --psm {psm} "
-                    "-c tessedit_char_whitelist=0123456789/ "
-                    "-c load_system_dawg=0 -c load_freq_dawg=0"
-                ),
-                timeout=2.5,
-            ).strip()
+            diagnostics.append(f"{label}={raw[:50]!r}" if raw else f"{label}=<пусто>")
             if not raw:
                 continue
+
             compact = re.sub(r"[^0-9/]", "", raw)
             for match in re.finditer(r"(\d{1,6})/(\d{1,6})", compact):
                 current, maximum = int(match.group(1)), int(match.group(2))
                 if maximum < min_max or maximum <= 0 or current > maximum:
-                    rejected.append(raw)
                     continue
                 if expected_max is not None and maximum != expected_max:
-                    rejected.append(raw)
                     continue
                 parsed.append((current, maximum, raw))
 
         if not parsed:
-            return None, None, rejected[-1] if rejected else ""
+            return (
+                None,
+                None,
+                "отношение не распознано; " + "; ".join(diagnostics),
+            )
 
-        # This is a provisional read of one screenshot. The caller's
-        # _scan_game_state() confirms it against a second independent capture.
         return select_ratio_candidate(parsed)
-
 
     def _read_income_parts(
         self, crop: Image.Image, min_max: int = 100, expected_max: int | None = None
     ) -> tuple[int | None, int | None, str]:
-        """Read yellow current income and white target separately.
+        """Read yellow current income and the white level target separately.
 
-        The level target is static for the active challenge. Detect it once with
-        multiple OCR passes, then reuse it and OCR only the changing numerator.
-        This avoids launching up to 17 Tesseract subprocesses every second.
+        The counter's current value can be animated and vary in brightness.
+        Use the yellow mask first, then a hue-based mask and a grayscale
+        numerator-only crop as fallbacks. The target remains independently
+        confirmed and is never mixed into the changing numerator.
         """
         rgb = crop.convert("RGB")
         width, height = rgb.size
+        debug_dir = os.path.dirname(self._config_path())
 
-        # Keep only yellow pixels from the animated current-income counter.
         yellow_mask = Image.new("L", (width, height), 0)
+        relaxed_mask = Image.new("L", (width, height), 0)
         source_pixels = rgb.load()
-        mask_pixels = yellow_mask.load()
+        yellow_pixels = yellow_mask.load()
+        relaxed_pixels = relaxed_mask.load()
+        hsv_pixels = rgb.convert("HSV").load()
+
         for y in range(height):
             for x in range(width):
                 red, green, blue = source_pixels[x, y]
+                hue, saturation, value = hsv_pixels[x, y]
+                # Original strict mask plus a wider HSV range for amber/yellow
+                # text after antialiasing, scaling or transparency blending.
                 if (
-                    red > 120 and green > 80 and blue < 120
-                    and red > green * 1.10 and green > blue * 1.25
+                    red > 120 and green > 80 and blue < 140
+                    and red > green * 1.04 and green > blue * 1.18
                 ):
-                    mask_pixels[x, y] = 255
+                    yellow_pixels[x, y] = 255
+                if 10 <= hue <= 68 and saturation >= 48 and value >= 70:
+                    relaxed_pixels[x, y] = 255
 
-        def read_digits(image: Image.Image, scales, psms):
-            values: list[tuple[int, str]] = []
-            base = ImageOps.autocontrast(image.convert("L"))
+        def read_digits(image: Image.Image, method: str, scales, psms):
+            values: list[tuple[int, str, str]] = []
+            gray = image.convert("L")
+            if gray.getbbox() is None:
+                return values
+
+            base = ImageOps.autocontrast(gray)
             for scale in scales:
                 enlarged = base.resize(
                     (base.width * scale, base.height * scale),
                     Image.Resampling.LANCZOS,
                 )
                 for psm in psms:
-                    raw = pytesseract.image_to_string(
-                        enlarged,
-                        config=(
-                            f"--oem 3 --psm {psm} "
-                            "-c tessedit_char_whitelist=0123456789 "
-                            "-c load_system_dawg=0 -c load_freq_dawg=0"
-                        ),
-                        timeout=2.5,
-                    ).strip()
+                    try:
+                        raw = pytesseract.image_to_string(
+                            enlarged,
+                            config=(
+                                f"--oem 3 --psm {psm} "
+                                "-c tessedit_char_whitelist=0123456789 "
+                                "-c load_system_dawg=0 -c load_freq_dawg=0"
+                            ),
+                            timeout=1.8,
+                        ).strip()
+                    except Exception as exc:
+                        diagnostics.append(f"{method}/psm{psm}=ошибка {type(exc).__name__}")
+                        continue
+
+                    diagnostics.append(
+                        f"{method}/psm{psm}={raw[:36]!r}" if raw
+                        else f"{method}/psm{psm}=<пусто>"
+                    )
                     for token in re.findall(r"\d{1,6}", raw):
-                        values.append((int(token), raw))
+                        values.append((int(token), raw, method))
             return values
 
-        # The target is constant for one challenge. Reuse the confirmed value
-        # after the first read instead of re-running OCR on the white digits.
+        diagnostics: list[str] = []
+        yellow_pixel_count = sum(yellow_mask.getdata()) // 255
+        relaxed_pixel_count = sum(relaxed_mask.getdata()) // 255
+
+        # The target is static during the challenge; confirm it from the right
+        # side of the counter once, then reuse it for the paired screenshot.
         if expected_max is None:
             target_crop = crop.crop((round(width * 0.54), 0, width, height))
             target_candidates = read_digits(
-                target_crop, scales=(3, 4), psms=(7, 8)
+                target_crop, "target", scales=(3, 4), psms=(7, 8)
             )
             target_candidates = [
-                item for item in target_candidates
-                if item[0] >= min_max
+                item for item in target_candidates if item[0] >= min_max
             ]
             target_votes: dict[int, int] = {}
-            for target_value, _ in target_candidates:
+            for target_value, _, _ in target_candidates:
                 target_votes[target_value] = target_votes.get(target_value, 0) + 1
+
             if not target_votes:
-                return None, None, "не удалось отдельно распознать целевой лимит"
+                return (
+                    None,
+                    None,
+                    "не удалось распознать целевой лимит; " + "; ".join(diagnostics),
+                )
 
             target, votes = max(target_votes.items(), key=lambda item: item[1])
             if votes < 2:
-                raw = target_candidates[-1][1]
-                return None, None, f"цель не подтверждена несколькими OCR-проходами: {raw!r}"
+                return (
+                    None,
+                    None,
+                    f"цель {target} не подтверждена; " + "; ".join(diagnostics),
+                )
         else:
             target = expected_max
-            votes = 2  # Previously confirmed for this running event.
+            votes = 2
 
-        # Multiple segmentation modes help retain leading digits. These passes
-        # run in the background, so they do not interrupt hammer clicks.
-        current_candidates = read_digits(
-            yellow_mask, scales=(3, 4), psms=(6, 7, 8)
-        )
-        # Income can overshoot the threshold (e.g. 2303/1900). Reject only
-        # implausibly large OCR noise, not legitimate values above target.
+        current_candidates: list[tuple[int, str, str]] = []
+        if yellow_pixel_count >= 6:
+            current_candidates = read_digits(
+                yellow_mask, "yellow", scales=(3, 4), psms=(6, 7, 8)
+            )
+
+        # If the strict mask is empty or reads only zero, retry with a wider
+        # hue range and with the numerator crop in grayscale. The denominator
+        # starts on the right, outside this crop, so it cannot become income.
+        if not current_candidates or all(item[0] == 0 for item in current_candidates):
+            if relaxed_pixel_count >= 6:
+                current_candidates.extend(
+                    read_digits(relaxed_mask, "yellow-relaxed", scales=(4,), psms=(7, 8))
+                )
+
+            numerator_crop = crop.crop((0, 0, round(width * 0.54), height))
+            numerator_gray = ImageOps.autocontrast(numerator_crop.convert("L"))
+            low, high = numerator_gray.getextrema()
+            cutoff = max(75, min(205, round(low + (high - low) * 0.56)))
+            numerator_binary = numerator_gray.point(
+                lambda value: 255 if value >= cutoff else 0
+            )
+            try:
+                numerator_binary.save(
+                    os.path.join(debug_dir, "debug_income_current_fallback.png")
+                )
+                yellow_mask.save(
+                    os.path.join(debug_dir, "debug_income_current_mask.png")
+                )
+                relaxed_mask.save(
+                    os.path.join(debug_dir, "debug_income_current_relaxed.png")
+                )
+            except Exception:
+                pass
+
+            current_candidates.extend(
+                read_digits(numerator_binary, "gray-fallback", scales=(4,), psms=(7, 8))
+            )
+
         upper_plausible = max(target * 3, target + 1000)
         valid_current = [
-            value for value, _ in current_candidates
-            if 0 <= value <= upper_plausible
+            item for item in current_candidates
+            if 0 <= item[0] <= upper_plausible
         ]
         if not valid_current:
-            return None, target, "целевой лимит найден, текущее значение дохода не распознано"
+            details = (
+                f"цель {target} распознана, числитель нет "
+                f"(yellow_px={yellow_pixel_count}, relaxed_px={relaxed_pixel_count})"
+            )
+            if diagnostics:
+                details += "; " + "; ".join(diagnostics[-10:])
+            return None, target, details
 
-        # Prefer the largest plausible value to preserve leading digits such as
-        # 1270 when another OCR pass sees only 270 or 70.
-        current = max(valid_current)
-        return current, target, f"{current}/{target}; target votes={votes}"
+        # Prefer the largest plausible candidate to preserve leading digits
+        # when a weaker pass sees only a suffix such as 270 instead of 1270.
+        current, raw, method = max(valid_current, key=lambda item: item[0])
+        return (
+            current,
+            target,
+            f"{current}/{target}; источник={method}; target votes={votes}",
+        )
 
     def read_income(self, expected_max: int | None = None):
         # The denominator is level-specific (for example 1100 or 1900).
