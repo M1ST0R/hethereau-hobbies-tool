@@ -67,6 +67,7 @@ The desktop interface uses **PySide6 + Qt Quick (QML)**. The automation and OCR 
 - **Selectable logs** — copy a highlighted excerpt with `Ctrl+C`, use the right-click menu, or copy the full log.
 - **Personalized interface** — language dropdown, Light / Dark switch, and saved preferences.
 - **Material Symbols Outlined** — official SVG glyphs bundled locally and tinted for the active theme. No remote font requests.
+- **UI font:** Montserrat Variable is bundled locally for consistent rendering on Windows and Linux. It is distributed under the SIL Open Font License 1.1; see [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
 - **Windows elevation** — the Windows build requests Administrator privileges through UAC so HHT can send input to an elevated game process.
 
 ## Downloads
