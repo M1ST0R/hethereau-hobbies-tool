@@ -10,4 +10,10 @@ fi
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
-exec .venv/bin/python hethereau_hobbies_tool.py
+if ! command -v tesseract >/dev/null 2>&1; then
+    echo "Tesseract OCR is required. Install it with:"
+    echo "  sudo apt install tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus"
+    exit 1
+fi
+
+exec .venv/bin/python hht_qt_main.py
