@@ -17,8 +17,7 @@ import customtkinter as ctk
 import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab, ImageTk
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
+import cairosvg
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -57,7 +56,10 @@ except Exception:
 
 # ---------------------------- FIXED SETTINGS -----------------------------
 APP_TITLE = "Hethereau Hobbies Tool (HHT)"
-APP_VERSION = "0.3.0-dev"
+try:
+    from hht_build_info import APP_VERSION, APP_CHANNEL
+except ImportError:
+    APP_VERSION, APP_CHANNEL = "0.3.0-dev", "dev"
 APP_GITHUB_URL = "https://github.com/M1ST0R/hethereau-hobbies-tool"
 SUPPORTED_LANGUAGES = {"en": "English", "ru": "Русский"}
 TARGET_EXE = "HTGame.exe"
@@ -130,6 +132,8 @@ EN_TRANSLATIONS = {
     "Новые занятия, включая рыбалку, будут добавляться отдельными модулями.": "New activities, including fishing, will be added as separate modules.",
     "Версия": "Version",
     "Открыть GitHub": "Open GitHub",
+    "Development build": "Development build",
+    "Release build": "Release build",
     "↻  Обновить окно": "↻  Refresh game window",
     "Обновить окно": "Refresh game window",
     "Запустить / Пауза · F6": "Start / Pause · F6",
@@ -291,12 +295,12 @@ SYMBOL_NAMES = {
 
 # (light-mode tint, dark-mode tint); one consistent Outlined icon family.
 SYMBOL_COLORS = {
-    "normal": ("#21304B", "#E8EDFF"),
-    "muted": ("#62718C", "#98A6C3"),
-    "accent": ("#4266D5", "#A7B9FF"),
-    "success": ("#16865D", "#55DDAA"),
-    "warning": ("#A86B08", "#F4C66A"),
-    "danger": ("#BF4055", "#FF8798"),
+    "normal": ("#17243B", "#F4F6FF"),
+    "muted": ("#52627D", "#C2CCE0"),
+    "accent": ("#3559C7", "#B5C4FF"),
+    "success": ("#147A55", "#65E4B5"),
+    "warning": ("#965D00", "#FFD27A"),
+    "danger": ("#B82F49", "#FF9AA9"),
 }
 
 
@@ -452,21 +456,20 @@ class OwnerSelectionApp:
         light_color, dark_color = SYMBOL_COLORS.get(tone, SYMBOL_COLORS["normal"])
 
         def render_icon(color: str) -> Image.Image:
-            colored_svg = svg_source.replace("<path ", f'<path fill="{color}" ', 1)
-            drawing = svg2rlg(io.BytesIO(colored_svg.encode("utf-8")))
-            if drawing is None:
-                raise ValueError(f"Could not parse Material Symbol: {name}")
-            # Render an RGBA surface with a transparent canvas. The previous
-            # default RGB canvas baked a solid background behind each glyph.
-            png_data = renderPM.drawToString(
-                drawing,
-                fmt="PNG",
-                dpi=72 * size / 24,
-                backend="rlPyCairo",
-                backendFmt="RGBA",
-                bg=None,
+            # CairoSVG honours the original Material Symbols viewBox, including
+            # its non-zero origin (0 -960 960 960). svglib cropped parts of
+            # several glyphs because it treated negative coordinates as offsets.
+            # Rasterize at 4x and let CTkImage downsample for crisp HiDPI display.
+            png_data = cairosvg.svg2png(
+                bytestring=svg_source.encode("utf-8"),
+                output_width=max(96, size * 4),
+                output_height=max(96, size * 4),
             )
-            return Image.open(io.BytesIO(png_data)).convert("RGBA")
+            rendered = Image.open(io.BytesIO(png_data)).convert("RGBA")
+            alpha = rendered.getchannel("A")
+            tinted = Image.new("RGBA", rendered.size, color)
+            tinted.putalpha(alpha)
+            return tinted
 
         try:
             icon_image = ctk.CTkImage(
@@ -975,7 +978,12 @@ class OwnerSelectionApp:
             font=ctk.CTkFont("Segoe UI", 17, "bold"),
         ).pack(pady=(0, 6))
         ctk.CTkLabel(
-            card, text=f"{self.tr('Версия')} {APP_VERSION}", text_color=MUTED,
+            card,
+            text=(
+                f"{self.tr('Версия')} {APP_VERSION} · "
+                f"{self.tr('Development build') if APP_CHANNEL == 'dev' else self.tr('Release build')}"
+            ),
+            text_color=MUTED,
             font=ctk.CTkFont("Segoe UI", 11),
         ).pack(pady=(0, 16))
 
