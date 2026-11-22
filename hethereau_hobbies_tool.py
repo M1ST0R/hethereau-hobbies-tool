@@ -64,6 +64,7 @@ except ImportError:
     APP_VERSION, APP_CHANNEL = "0.3.0-dev", "dev"
 APP_GITHUB_URL = "https://github.com/M1ST0R/hethereau-hobbies-tool"
 SUPPORTED_LANGUAGES = {"en": "English", "ru": "Русский"}
+MAX_LOG_ENTRIES = 5000
 TARGET_EXE = "HTGame.exe"
 REFERENCE_WIDTH = 1600
 REFERENCE_HEIGHT = 900
@@ -1045,7 +1046,7 @@ class OwnerSelectionApp:
     def log(self, message: str):
         stamp = datetime.now().strftime("%H:%M:%S")
         self.log_history.append((stamp, message))
-        dropped_oldest = len(self.log_history) > 1000
+        dropped_oldest = len(self.log_history) > MAX_LOG_ENTRIES
         if dropped_oldest:
             self.log_history.pop(0)
 
