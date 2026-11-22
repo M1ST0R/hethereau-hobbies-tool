@@ -16,7 +16,7 @@ from datetime import datetime
 import customtkinter as ctk
 import pyautogui
 import pytesseract
-from PIL import Image, ImageOps, ImageGrab
+from PIL import Image, ImageOps, ImageGrab, ImageTk
 from svglib.svglib import svg2rlg
 from reportlab.graphics import renderPM
 
@@ -79,7 +79,7 @@ MIN_INCOME_TARGET = 100  # Reject clearly truncated OCR denominators such as "1"
 CLAIM_COST = 24
 SHOP_COST_MAX = 8
 MINIMUM_ENERGY_PER_CYCLE = CLAIM_COST + SHOP_COST_MAX
-CLICK_INTERVAL = 0.08
+CLICK_INTERVAL = 0.05
 OCR_INTERVAL = 1.0
 ENERGY_RETRY_INTERVAL = 1.5
 MAX_ENERGY_OCR_FAILURES = 8
@@ -368,6 +368,8 @@ class OwnerSelectionApp:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self._symbol_cache: dict[tuple[str, int, str], ctk.CTkImage] = {}
         self._symbol_svg: dict[str, str] = {}
+        self._logo_pil: Image.Image | None = None
+        self._window_icon_photo = None
         self.logs_window = None
         self.about_window = None
         self.log_text = None
@@ -397,7 +399,20 @@ class OwnerSelectionApp:
 
 
     def _load_visual_assets(self):
-        """Load Google's official Material Symbols Outlined SVG glyphs from the app bundle."""
+        """Load the optional HHT launcher icon and bundled Material Symbols Outlined glyphs."""
+        icon_path = resource_path("assets/app_icon.png")
+        if os.path.isfile(icon_path):
+            try:
+                self._logo_pil = Image.open(icon_path).convert("RGBA")
+                self._window_icon_photo = ImageTk.PhotoImage(self._logo_pil)
+                self.root.iconphoto(True, self._window_icon_photo)
+            except Exception as exc:
+                self._logo_pil = None
+                self.log_history.append((
+                    datetime.now().strftime("%H:%M:%S"),
+                    f"Не удалось загрузить иконку приложения: {exc}",
+                ))
+
         try:
             with open(resource_path("assets/icons/material_symbols_outlined.json"), "r", encoding="utf-8") as icon_file:
                 self._symbol_svg = json.load(icon_file)
@@ -1379,8 +1394,9 @@ class OwnerSelectionApp:
         finally:
             dpy.close()
 
-    def _capture_client_image(self):
-        self._bring_game_to_front()
+    def _capture_client_image(self, ensure_focus: bool = False):
+        if ensure_focus:
+            self._bring_game_to_front()
         hwnd, screen_left, screen_top, width, height = self._client_geometry()
         if os.name == "nt":
             image = ImageGrab.grab(
@@ -1437,26 +1453,20 @@ class OwnerSelectionApp:
         if debug_name == "income":
             return self._read_income_parts(crop, min_max=min_max, expected_max=expected_max)
 
-        rgb = crop.convert("RGB")
         gray = ImageOps.autocontrast(crop.convert("L"))
-        red = ImageOps.autocontrast(rgb.getchannel("R"))
-        green = ImageOps.autocontrast(rgb.getchannel("G"))
-        blue = ImageOps.autocontrast(rgb.getchannel("B"))
 
+        # Two independent passes are enough for the static energy fraction.
+        # Avoid spawning 13 Tesseract processes for every cycle check.
         candidates = []
-        for source in (gray, red, green, blue):
-            for scale, psm in ((2, 7), (3, 7), (4, 8)):
-                enlarged = source.resize(
-                    (source.width * scale, source.height * scale),
-                    Image.Resampling.LANCZOS,
-                )
-                candidates.append((enlarged, psm))
-
-        # Also try a thresholded image; this often separates bright digits
-        # from the dark textured counter background.
+        for scale, psm in ((3, 7), (4, 8)):
+            enlarged = gray.resize(
+                (gray.width * scale, gray.height * scale),
+                Image.Resampling.LANCZOS,
+            )
+            candidates.append((enlarged, psm))
         threshold = gray.point(lambda value: 255 if value > 150 else 0)
         candidates.append((threshold.resize(
-            (threshold.width * 4, threshold.height * 4), Image.Resampling.LANCZOS
+            (threshold.width * 3, threshold.height * 3), Image.Resampling.LANCZOS
         ), 7))
 
         parsed: list[tuple[int, int, str]] = []
@@ -1505,16 +1515,16 @@ class OwnerSelectionApp:
     def _read_income_parts(
         self, crop: Image.Image, min_max: int = 100, expected_max: int | None = None
     ) -> tuple[int | None, int | None, str]:
-        """Read numerator and level target separately from their distinct screen colors.
+        """Read yellow current income and white target separately.
 
-        The current income is yellow and the level target is white. Separating
-        the colored fields prevents the animated numerator or slash from being
-        merged into the target (the old failure could turn 1270/1900 into 70/1).
+        The level target is static for the active challenge. Detect it once with
+        multiple OCR passes, then reuse it and OCR only the changing numerator.
+        This avoids launching up to 17 Tesseract subprocesses every second.
         """
         rgb = crop.convert("RGB")
         width, height = rgb.size
 
-        # Keep only yellow pixels for the animated current-income value.
+        # Keep only yellow pixels from the animated current-income counter.
         yellow_mask = Image.new("L", (width, height), 0)
         source_pixels = rgb.load()
         mask_pixels = yellow_mask.load()
@@ -1526,11 +1536,6 @@ class OwnerSelectionApp:
                     and red > green * 1.10 and green > blue * 1.25
                 ):
                     mask_pixels[x, y] = 255
-
-        # The white target starts after the slash. Crop just that right-hand
-        # part so the changing yellow numerator cannot become a leading digit.
-        target_crop = crop.crop((round(width * 0.54), 0, width, height))
-        target_gray = ImageOps.autocontrast(target_crop.convert("L"))
 
         def read_digits(image: Image.Image, scales, psms):
             values: list[tuple[int, str]] = []
@@ -1553,37 +1558,51 @@ class OwnerSelectionApp:
                         values.append((int(token), raw))
             return values
 
-        target_candidates = read_digits(target_gray, scales=(2, 3, 4), psms=(7, 8, 13))
-        target_candidates = [
-            item for item in target_candidates
-            if item[0] >= min_max and (expected_max is None or item[0] == expected_max)
-        ]
-        target_votes: dict[int, int] = {}
-        for target_value, _ in target_candidates:
-            target_votes[target_value] = target_votes.get(target_value, 0) + 1
-        if not target_votes:
-            return None, None, "не удалось отдельно распознать целевой лимит"
+        # The target is constant for one challenge. Reuse the confirmed value
+        # after the first read instead of re-running OCR on the white digits.
+        if expected_max is None:
+            target_crop = crop.crop((round(width * 0.54), 0, width, height))
+            target_candidates = read_digits(
+                target_crop, scales=(3, 4), psms=(7, 8)
+            )
+            target_candidates = [
+                item for item in target_candidates
+                if item[0] >= min_max
+            ]
+            target_votes: dict[int, int] = {}
+            for target_value, _ in target_candidates:
+                target_votes[target_value] = target_votes.get(target_value, 0) + 1
+            if not target_votes:
+                return None, None, "не удалось отдельно распознать целевой лимит"
 
-        target, votes = max(target_votes.items(), key=lambda item: item[1])
-        if votes < 2:
-            raw = target_candidates[-1][1]
-            return None, None, f"цель не подтверждена несколькими OCR-проходами: {raw!r}"
+            target, votes = max(target_votes.items(), key=lambda item: item[1])
+            if votes < 2:
+                raw = target_candidates[-1][1]
+                return None, None, f"цель не подтверждена несколькими OCR-проходами: {raw!r}"
+        else:
+            target = expected_max
+            votes = 2  # Previously confirmed for this running event.
 
-        current_candidates = read_digits(yellow_mask, scales=(2, 3, 4, 5), psms=(6, 7))
-        valid_current = [value for value, _ in current_candidates if value <= target]
+        # With a confirmed denominator, the numerator needs only two quick
+        # independent passes. On the first read, use one extra PSM as a fallback.
+        current_psms = (7,) if expected_max is not None else (7, 8)
+        current_candidates = read_digits(
+            yellow_mask, scales=(3, 4), psms=current_psms
+        )
+        valid_current = [value for value, _ in current_candidates if 0 <= value <= target]
         if not valid_current:
             return None, target, "целевой лимит найден, текущее значение дохода не распознано"
 
-        # Some OCR passes may omit a leading digit. Prefer the largest valid
-        # result, but never allow it to exceed the independently-read target.
+        # Prefer the largest plausible value to preserve leading digits such as
+        # 1270 when another OCR pass sees only 270 or 70.
         current = max(valid_current)
         return current, target, f"{current}/{target}; target votes={votes}"
 
-    def read_income(self):
-        # The denominator is the level-specific target (for example 1100 or 1900).
-        # Detect it from the live counter instead of assuming one fixed difficulty.
+    def read_income(self, expected_max: int | None = None):
+        # The denominator is level-specific (for example 1100 or 1900).
+        # Once detected, pass it back to avoid repeating OCR on static digits.
         current, maximum, raw = self._read_ratio(
-            INCOME_REGION, "income", expected_max=None, min_max=MIN_INCOME_TARGET
+            INCOME_REGION, "income", expected_max=expected_max, min_max=MIN_INCOME_TARGET
         )
         if current is not None and maximum is not None:
             self.set_metric("income", f"{current:,} / {maximum:,}")
@@ -1598,6 +1617,7 @@ class OwnerSelectionApp:
     def test_ocr(self):
         def run_test():
             try:
+                self._bring_game_to_front()
                 energy, energy_max, energy_raw = self.read_energy()
                 energy_meta = self.last_ocr_meta
                 energy_debug = self.last_ocr_debug_path
@@ -1642,11 +1662,11 @@ class OwnerSelectionApp:
         return not self.stop_event.is_set()
 
     def _click(self, name):
+        """Click in the already-focused game window without a costly focus round-trip."""
         while self.pause_event.is_set() and not self.stop_event.is_set():
-            time.sleep(0.1)
+            time.sleep(0.05)
         if self.stop_event.is_set():
             return False
-        self._bring_game_to_front()
         pyautogui.click(*self._point(name))
         return not self.stop_event.is_set()
 
@@ -1712,7 +1732,7 @@ class OwnerSelectionApp:
                     self._click("Молоток")
                     now = time.monotonic()
                     if now - last_ocr >= OCR_INTERVAL:
-                        current, maximum, raw = self.read_income()
+                        current, maximum, raw = self.read_income(expected_max=active_income_target)
                         last_ocr = now
                         if current is not None and maximum is not None:
                             last_seen = now
