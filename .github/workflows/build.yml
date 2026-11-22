@@ -1,4 +1,4 @@
-name: Build packages
+name: Build HHT packages
 
 on:
   push:
@@ -44,7 +44,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3-tk scrot wmctrl tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus libx11-6 libxtst6 libxinerama1 libxrandr2 libxi6 libxcb1 libxkbcommon-x11-0
+          sudo apt-get install -y build-essential python3-tk scrot wmctrl pkg-config libcairo2-dev tesseract-ocr tesseract-ocr-eng tesseract-ocr-rus libx11-6 libxtst6 libxinerama1 libxrandr2 libxi6 libxcb1 libxkbcommon-x11-0
 
       - name: Install Python dependencies
         run: |
@@ -57,72 +57,70 @@ jobs:
         run: |
           $tesseractDir = "$env:ProgramFiles\Tesseract-OCR"
           if (!(Test-Path "$tesseractDir\tesseract.exe")) { throw "Tesseract was not found at $tesseractDir" }
-          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --icon "assets/host.ico" --name "Hethereau-HOST" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" etero_owner_selection.py
+          pyinstaller --noconfirm --clean --onefile --windowed --uac-admin --name "HHT" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all svglib --collect-all reportlab --collect-all rlPyCairo --collect-all cairocffi --hidden-import cairo --hidden-import win32timezone --hidden-import win32gui --hidden-import win32process --hidden-import win32con --add-data "assets;assets" --add-data "$tesseractDir;tesseract" hethereau_hobbies_tool.py
           New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "dist\Hethereau-HOST.exe" "release\Hethereau-HOST-Windows-x64.exe"
+          Copy-Item "dist\HHT.exe" "release\Hethereau-HHT-Windows-x64.exe"
 
       - name: Build Linux executable and packages
         if: runner.os == 'Linux'
         shell: bash
         run: |
           set -euo pipefail
-          pyinstaller --noconfirm --clean --onedir --icon "assets/host.png" --add-data "assets:assets" --name HOST --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --hidden-import pynput.keyboard._xorg etero_owner_selection.py
+          pyinstaller --noconfirm --clean --onedir --name HHT --add-data "assets:assets" --collect-all customtkinter --collect-all pyautogui --collect-all pytesseract --collect-all pynput --collect-all PIL --collect-all Xlib --collect-all svglib --collect-all reportlab --collect-all rlPyCairo --collect-all cairocffi --hidden-import cairo --hidden-import pynput.keyboard._xorg hethereau_hobbies_tool.py
 
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ "$VERSION" == "$GITHUB_REF_NAME" ]]; then VERSION="0.0.0+${GITHUB_SHA:0:7}"; fi
 
           mkdir -p release
-          PACKAGE_ROOT="$RUNNER_TEMP/host-deb"
-          install -d "$PACKAGE_ROOT/opt/hethereau-host" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/usr/share/icons/hicolor/96x96/apps" "$PACKAGE_ROOT/DEBIAN"
-          cp -a dist/HOST/. "$PACKAGE_ROOT/opt/hethereau-host/"
+          PACKAGE_ROOT="$RUNNER_TEMP/hht-deb"
+          install -d "$PACKAGE_ROOT/opt/hethereau-hobbies-tool" "$PACKAGE_ROOT/usr/bin" "$PACKAGE_ROOT/usr/share/applications" "$PACKAGE_ROOT/DEBIAN"
+          cp -a dist/HHT/. "$PACKAGE_ROOT/opt/hethereau-hobbies-tool/"
 
-          cat > "$PACKAGE_ROOT/usr/bin/hethereau-host" <<'LAUNCHER'
+          cat > "$PACKAGE_ROOT/usr/bin/hht" <<'LAUNCHER'
           #!/bin/sh
-          exec /opt/hethereau-host/HOST "$@"
+          exec /opt/hethereau-hobbies-tool/HHT "$@"
           LAUNCHER
-          chmod 755 "$PACKAGE_ROOT/usr/bin/hethereau-host"
+          chmod 755 "$PACKAGE_ROOT/usr/bin/hht"
 
-          cp assets/host.png "$PACKAGE_ROOT/usr/share/icons/hicolor/96x96/apps/hethereau-host.png"
-          cat > "$PACKAGE_ROOT/usr/share/applications/hethereau-host.desktop" <<'DESKTOP'
+          cat > "$PACKAGE_ROOT/usr/share/applications/hethereau-hobbies-tool.desktop" <<'DESKTOP'
           [Desktop Entry]
           Type=Application
-          Name=Hethereau Owner's Selection Tool (HOST)
-          Comment=Owner's Selection game event automation
-          Exec=hethereau-host
-          Icon=hethereau-host
+          Name=Hethereau Hobbies Tool (HHT)
+          Comment=Automation toolkit for NTE hobbies
+          Exec=hht
           Terminal=false
           Categories=Game;Utility;
           DESKTOP
 
           cat > "$PACKAGE_ROOT/DEBIAN/control" <<CONTROL
-          Package: hethereau-host
+          Package: hethereau-hobbies-tool
           Version: $VERSION
           Section: games
           Priority: optional
           Architecture: amd64
-          Depends: libx11-6, libxtst6, libxinerama1, libxrandr2, libxi6, libxcb1, libxkbcommon-x11-0, scrot, wmctrl, tesseract-ocr, tesseract-ocr-eng, tesseract-ocr-rus
+          Depends: libcairo2, libx11-6, libxtst6, libxinerama1, libxrandr2, libxi6, libxcb1, libxkbcommon-x11-0, scrot, wmctrl, tesseract-ocr, tesseract-ocr-eng, tesseract-ocr-rus
           Maintainer: M1ST0R
-          Description: Hethereau Owner's Selection Tool (HOST)
-           Desktop automation for the Owner's Selection event in Hethereau.
+          Description: Hethereau Hobbies Tool (HHT)
+           Desktop automation toolkit for hobbies in Neverness to Everness.
           CONTROL
 
-          dpkg-deb --build "$PACKAGE_ROOT" "release/hethereau-host_${VERSION}_amd64.deb"
+          dpkg-deb --build "$PACKAGE_ROOT" "release/hethereau-hobbies-tool_${VERSION}_amd64.deb"
 
           mkdir -p portable
-          cp -a dist/HOST portable/HOST
+          cp -a dist/HHT portable/HHT
           cat > portable/run.sh <<'RUN'
           #!/bin/sh
           DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-          exec "$DIR/HOST/HOST" "$@"
+          exec "$DIR/HHT/HHT" "$@"
           RUN
           chmod +x portable/run.sh
           cp README.md README.ru.md portable/
-          tar -czf release/Hethereau-HOST-Linux-x86_64.tar.gz -C portable .
+          tar -czf release/Hethereau-HHT-Linux-x86_64.tar.gz -C portable .
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: HOST-${{ matrix.artifact }}
+          name: HHT-${{ matrix.artifact }}
           path: release/*
           if-no-files-found: error
           retention-days: 14
@@ -136,7 +134,7 @@ jobs:
       - name: Download all platform packages
         uses: actions/download-artifact@v4
         with:
-          pattern: HOST-*
+          pattern: HHT-*
           path: release-assets
           merge-multiple: true
 
