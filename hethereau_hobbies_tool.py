@@ -609,9 +609,12 @@ class OwnerSelectionApp:
         )
         self.refresh_button.pack(side="right", anchor="center", padx=(8, 0))
 
+        ctk.CTkLabel(
+            header, text="",
+            image=self.symbol_image("dark_mode" if self.theme_mode == "dark" else "light_mode", 18, "muted"),
+        ).pack(side="right", padx=(0, 2), anchor="center")
         self.theme_switch = ctk.CTkSwitch(
             header, text=self.tr("Тёмная тема"),
-            image=self.symbol_image("dark_mode" if self.theme_mode == "dark" else "light_mode", 18, "muted"),
             onvalue="dark", offvalue="light", command=self._theme_changed,
             fg_color=BORDER, progress_color=ACCENT, button_color=TEXT,
             button_hover_color=ACCENT_HOVER, text_color=TEXT,
