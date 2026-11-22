@@ -27,8 +27,11 @@
   <a href="#features"><strong>Features</strong></a>
   ·
   <a href="#quick-start"><strong>Quick start</strong></a>
-  ·
-  <a href="README.ru.md"><strong>Русская версия</strong></a>
+</p>
+
+<p align="center">
+  <a href="README.md"><strong>🇬🇧</strong></a>
+  <a href="README.ru.md"><strong>🇷🇺</strong></a>
 </p>
 
 ---
@@ -38,7 +41,7 @@
 
 ## ✦ At a glance
 
-| | |
+| **Thing** | **Desc** |
 |---|---|
 | **Current module** | Owner's Selection |
 | **Game process** | `HTGame.exe` |
