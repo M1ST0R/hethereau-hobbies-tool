@@ -165,6 +165,7 @@ EN_TRANSLATIONS = {
     "▶  Запустить / Пауза  ·  F6": "▶  Start / Pause  ·  F6",
     "■  Стоп  ·  F7": "■  Stop  ·  F7",
     "Проверить распознавание": "Test OCR",
+    "Сканировать доход и энергию": "Scan income and energy",
     "Запуск / пауза": "Start / pause",
     "Остановить": "Stop",
     "ЖУРНАЛ": "ACTIVITY LOG",
@@ -834,12 +835,12 @@ class OwnerSelectionApp:
         self.stop_button.pack(side="left", padx=(6, 0))
 
         self.ocr_button = ctk.CTkButton(
-            outer, text=self.tr("Проверить распознавание"),
+            outer, text=self.tr("Сканировать доход и энергию"),
             image=self.symbol_image("fact_check", 18, "muted"), compound="left", height=34,
             fg_color="transparent", hover_color=PANEL_ALT,
             border_width=1, border_color=BORDER, text_color=MUTED,
             font=ctk.CTkFont("Segoe UI", 11),
-            command=self.test_ocr,
+            command=self.scan_state_manual,
         )
         self.ocr_button.pack(fill="x", pady=(0, 12))
 
@@ -1788,6 +1789,7 @@ class OwnerSelectionApp:
         if self.worker_thread and self.worker_thread.is_alive():
             self.log("Ручной скан пропущен: автоматизация сама проверяет счётчики при старте, паузе и смене цикла.")
             return
+        self.stop_event.clear()
 
         def run_scan():
             try:
@@ -1833,24 +1835,29 @@ class OwnerSelectionApp:
                 continue
 
             if paused_during_wait and self.rescan_requested.is_set():
-                self.rescan_requested.clear()
-                self.set_status(
-                    "ПОВТОРНЫЙ СКАН",
-                    "После паузы проверяю состояние игры перед продолжением",
-                )
-                scan = self._scan_game_state(
-                    include_income=(resume_scan == "both"),
-                    reason="после снятия паузы",
-                )
-                if scan is None:
-                    self.worker_error = (
-                        "ОШИБКА СИНХРОНИЗАЦИИ",
-                        self.last_scan_error or "Не удалось подтвердить счётчики после паузы",
+                if resume_scan == "both":
+                    # The hammer loop owns a background income OCR thread. Let
+                    # that loop join it and perform the paired scan safely.
+                    paused_during_wait = False
+                else:
+                    self.rescan_requested.clear()
+                    self.set_status(
+                        "ПОВТОРНЫЙ СКАН",
+                        "После паузы проверяю энергию перед продолжением",
                     )
-                    self.stop_event.set()
-                    return False
-                self.last_resume_scan = scan
-                paused_during_wait = False
+                    scan = self._scan_game_state(
+                        include_income=False,
+                        reason="после паузы на экране награды",
+                    )
+                    if scan is None:
+                        self.worker_error = (
+                            "ОШИБКА СИНХРОНИЗАЦИИ",
+                            self.last_scan_error or "Не удалось подтвердить энергию после паузы",
+                        )
+                        self.stop_event.set()
+                        return False
+                    self.last_resume_scan = scan
+                    paused_during_wait = False
 
             step = min(0.1, remaining)
             time.sleep(step)
@@ -1974,14 +1981,13 @@ class OwnerSelectionApp:
                         output["elapsed_ms"] = (time.perf_counter() - started) * 1000
 
                 while not self.stop_event.is_set():
-                    was_paused = self.pause_event.is_set()
                     while self.pause_event.is_set() and not self.stop_event.is_set():
                         self.set_status("ПАУЗА", "Фарм приостановлен. F6 продолжит текущий цикл.")
                         time.sleep(0.1)
                     if self.stop_event.is_set():
                         break
 
-                    if was_paused and self.rescan_requested.is_set():
+                    if self.rescan_requested.is_set():
                         # Wait for any previous background OCR to finish before
                         # taking a fresh pair of screenshots after resume.
                         if income_thread is not None and income_thread.is_alive():
@@ -1989,6 +1995,8 @@ class OwnerSelectionApp:
                                 income_thread.join(timeout=0.1)
                         if self.stop_event.is_set():
                             break
+                        income_thread = None
+                        income_result = None
                         self.rescan_requested.clear()
                         self.last_resume_scan = None
                         self.set_status(
