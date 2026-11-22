@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <img src="assets/app_icon.png" alt="HHT app mascot" width="112">
+</p>
+
+<p align="center">
   <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml"><img src="https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml/badge.svg" alt="Build packages"></a>
   <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/releases"><img src="https://img.shields.io/github/v/release/M1ST0R/hethereau-hobbies-tool?label=latest%20release&color=ff648d" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c8fff.svg" alt="MIT license"></a>
