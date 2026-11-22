@@ -453,7 +453,18 @@ class OwnerSelectionApp:
         return icon_image
 
     def _config_path(self) -> str:
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "app_config.json")
+        """Use a persistent per-user configuration folder, not PyInstaller's temp bundle."""
+        if os.name == "nt":
+            base = os.environ.get("APPDATA") or os.path.expanduser("~")
+            app_dir = os.path.join(base, "Hethereau Hobbies Tool")
+        elif sys.platform.startswith("linux"):
+            base = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
+            app_dir = os.path.join(base, "hethereau-hobbies-tool")
+        else:
+            app_dir = os.path.join(os.path.expanduser("~"), ".hethereau-hobbies-tool")
+
+        os.makedirs(app_dir, exist_ok=True)
+        return os.path.join(app_dir, "app_config.json")
 
     def _read_preferences(self) -> dict:
         try:
