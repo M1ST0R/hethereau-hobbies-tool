@@ -28,7 +28,8 @@ The latest workflow build is also available under the repository's **Actions →
 - Detects the target income automatically from the live counter denominator (for example, 1100 or 1900); the target is not hard-coded to one difficulty.
 - Requires OCR consensus for the target and confirms completion with a second reading.
 - Exits the challenge, claims the reward, checks energy, and starts another cycle when possible.
-- Dark desktop GUI with cycle, energy, and income indicators, status display, and activity log.
+- Desktop GUI with cycle, energy, and income indicators, status display, and activity log.
+- Automatically follows the operating system's light/dark appearance. The Material Symbols Rounded icon set switches tint with the active mode.
 - Global hotkeys: F6 to start/pause/resume and F7 to stop.
 - English and Russian UI. Use the RU / EN button in the app header; the choice is saved locally.
 
@@ -57,7 +58,7 @@ Then launch Hethereau Owner's Selection Tool from the application menu or run:
 hethereau-host
 ~~~
 
-The package installs the required X11 utilities and Tesseract language data through package dependencies.
+The package installs the required X11 utilities and Tesseract language data through package dependencies. On Linux, HOST runs as the current desktop user; do not launch it with `sudo`.
 
 On Windows, HOST always requests administrator privileges through UAC before starting. The packaged EXE carries a `requireAdministrator` manifest, and source runs elevate themselves. This is needed when HOST must send input to applications that run with elevated privileges. Review the UAC prompt before approving.
 
