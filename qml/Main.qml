@@ -1379,7 +1379,7 @@ ApplicationWindow {
                                         Button {
                                             id: resetHotkeysButton
                                             text: root.tr("По умолчанию", "Restore defaults")
-                                            onClicked: backend.setHotkeys("F6", "F7")
+                                            onClicked: backend.setHotkeys("INS", "DEL")
                                             background: Rectangle {
                                                 radius: 9
                                                 color: resetHotkeysButton.hovered ? panelAlt : "transparent"
