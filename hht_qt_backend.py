@@ -54,14 +54,23 @@ class HHTBackend(QObject):
         core.language = core._load_language()
         core.theme_mode = core._load_theme()
         preferences = core._read_preferences()
-        core.toggle_hotkey = preferences.get("toggle_hotkey", "F6")
-        core.stop_hotkey = preferences.get("stop_hotkey", "F7")
-        core.toggle_hotkey = str(core.toggle_hotkey).upper()
-        core.stop_hotkey = str(core.stop_hotkey).upper()
+        core.toggle_hotkey = str(preferences.get("toggle_hotkey", "INS")).upper()
+        core.stop_hotkey = str(preferences.get("stop_hotkey", "DEL")).upper()
+        migrate_defaults = (
+            core.toggle_hotkey == "F6" and core.stop_hotkey == "F7"
+        )
+        if migrate_defaults:
+            # F6/F7 were the application's old factory defaults. Replace only
+            # that untouched pair; preserve any shortcuts chosen by the user.
+            core.toggle_hotkey, core.stop_hotkey = "INS", "DEL"
         if not is_valid_hotkey(core.toggle_hotkey):
-            core.toggle_hotkey = "F6"
+            core.toggle_hotkey = "INS"
+            migrate_defaults = True
         if not is_valid_hotkey(core.stop_hotkey) or core.stop_hotkey == core.toggle_hotkey:
-            core.stop_hotkey = "F7" if core.toggle_hotkey != "F7" else "F8"
+            core.stop_hotkey = "DEL" if core.toggle_hotkey != "DEL" else "INS"
+            migrate_defaults = True
+        if migrate_defaults:
+            core._save_preferences()
         core.ui_metrics = {"cycles": "0", "energy": "—", "income": "—"}
         core.current_status = "ГОТОВ К РАБОТЕ"
         core.current_stage = "Ожидание запуска"
