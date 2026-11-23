@@ -938,158 +938,7 @@ ApplicationWindow {
                                 }
                             }
 
-                            // Connection and diagnostics tools.
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 12
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 1
-                                    Layout.preferredHeight: 93
-                                    radius: 15
-                                    color: panel
-                                    border.color: borderColor
-
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 14
-                                        spacing: 11
-
-                                        Rectangle {
-                                            width: 36
-                                            height: 36
-                                            radius: 11
-                                            color: panelAlt
-                                            Image {
-                                                anchors.centerIn: parent
-                                                source: root.iconPath("desktop_windows")
-                                                sourceSize: Qt.size(76, 76)
-                                                mipmap: false
-                                                width: 19
-                                                height: 19
-                                            }
-                                        }
-
-                                        ColumnLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 4
-                                            Text {
-                                                text: root.tr("ИГРОВОЕ ОКНО", "GAME WINDOW")
-                                                color: faintColor
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                                font.letterSpacing: 1.0
-                                            }
-                                            Text {
-                                                text: backend.windowStatus
-                                                color: textColor
-                                                font.pixelSize: 13
-                                                font.bold: true
-                                                elide: Text.ElideRight
-                                                Layout.fillWidth: true
-                                            }
-                                            Text {
-                                                text: backend.gameConnected
-                                                    ? root.tr("Подключение активно", "Connection active")
-                                                    : root.tr("Проверь, что игра запущена", "Make sure the game is running")
-                                                color: backend.gameConnected ? green : amber
-                                                font.pixelSize: 11
-                                            }
-                                        }
-
-                                        Button {
-                                            id: refreshButton
-                                            Layout.preferredWidth: 37
-                                            Layout.preferredHeight: 37
-                                            onClicked: backend.refreshGameWindow()
-                                            background: Rectangle {
-                                                radius: 10
-                                                color: refreshButton.hovered ? panelAlt : "transparent"
-                                                border.color: borderColor
-                                            }
-                                            contentItem: Image {
-                                                source: root.iconPath("refresh")
-                                                sourceSize: Qt.size(68, 68)
-                                                mipmap: false
-                                                width: 17
-                                                height: 17
-                                            }
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    Layout.fillWidth: true
-                                    Layout.preferredWidth: 1
-                                    Layout.preferredHeight: 93
-                                    radius: 15
-                                    color: panel
-                                    border.color: borderColor
-
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 14
-                                        spacing: 10
-                                        Rectangle {
-                                            width: 36
-                                            height: 36
-                                            radius: 11
-                                            color: root.darkMode ? "#28304A" : "#EEEAFE"
-                                            Image {
-                                                anchors.centerIn: parent
-                                                source: root.iconPath("document_scanner")
-                                                sourceSize: Qt.size(92, 92)
-                                                mipmap: false
-                                                width: 23
-                                                height: 23
-                                            }
-                                        }
-                                        ColumnLayout {
-                                            Layout.fillWidth: true
-                                            spacing: 4
-                                            Text {
-                                                text: root.tr("ДИАГНОСТИКА", "DIAGNOSTICS")
-                                                color: faintColor
-                                                font.pixelSize: 11
-                                                font.bold: true
-                                                font.letterSpacing: 1.0
-                                            }
-                                            Text {
-                                                text: root.tr("Проверить OCR", "Verify OCR")
-                                                color: textColor
-                                                font.pixelSize: 13
-                                                font.bold: true
-                                            }
-                                            Text {
-                                                text: root.tr("Энергия и доход", "Energy and income")
-                                                color: mutedColor
-                                                font.pixelSize: 11
-                                            }
-                                        }
-                                        Button {
-                                            id: scanButton
-                                            Layout.preferredWidth: 72
-                                            Layout.preferredHeight: 37
-                                            text: root.tr("Скан", "Scan")
-                                            onClicked: backend.scanState()
-                                            background: Rectangle {
-                                                radius: 10
-                                                color: scanButton.hovered ? panelAlt : panelRaised
-                                                border.color: borderColor
-                                            }
-                                            contentItem: Text {
-                                                text: scanButton.text
-                                                color: accentBright
-                                                font.pixelSize: 12
-                                                font.bold: true
-                                                horizontalAlignment: Text.AlignHCenter
-                                                verticalAlignment: Text.AlignVCenter
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            
 
                 }
 
@@ -1577,6 +1426,159 @@ ApplicationWindow {
                                                     height: 20
                                                 }
                                             }
+
+                            // Game window and OCR diagnostics
+RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 12
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 1
+                                    Layout.preferredHeight: 93
+                                    radius: 15
+                                    color: panel
+                                    border.color: borderColor
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 14
+                                        spacing: 11
+
+                                        Rectangle {
+                                            width: 36
+                                            height: 36
+                                            radius: 11
+                                            color: panelAlt
+                                            Image {
+                                                anchors.centerIn: parent
+                                                source: root.iconPath("desktop_windows")
+                                                sourceSize: Qt.size(76, 76)
+                                                mipmap: false
+                                                width: 19
+                                                height: 19
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+                                            Text {
+                                                text: root.tr("ИГРОВОЕ ОКНО", "GAME WINDOW")
+                                                color: faintColor
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                font.letterSpacing: 1.0
+                                            }
+                                            Text {
+                                                text: backend.windowStatus
+                                                color: textColor
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                            Text {
+                                                text: backend.gameConnected
+                                                    ? root.tr("Подключение активно", "Connection active")
+                                                    : root.tr("Проверь, что игра запущена", "Make sure the game is running")
+                                                color: backend.gameConnected ? green : amber
+                                                font.pixelSize: 11
+                                            }
+                                        }
+
+                                        Button {
+                                            id: settingsRefreshButton
+                                            Layout.preferredWidth: 37
+                                            Layout.preferredHeight: 37
+                                            onClicked: backend.refreshGameWindow()
+                                            background: Rectangle {
+                                                radius: 10
+                                                color: settingsRefreshButton.hovered ? panelAlt : "transparent"
+                                                border.color: borderColor
+                                            }
+                                            contentItem: Image {
+                                                source: root.iconPath("refresh")
+                                                sourceSize: Qt.size(68, 68)
+                                                mipmap: false
+                                                width: 17
+                                                height: 17
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredWidth: 1
+                                    Layout.preferredHeight: 93
+                                    radius: 15
+                                    color: panel
+                                    border.color: borderColor
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 14
+                                        spacing: 10
+                                        Rectangle {
+                                            width: 36
+                                            height: 36
+                                            radius: 11
+                                            color: root.darkMode ? "#28304A" : "#EEEAFE"
+                                            Image {
+                                                anchors.centerIn: parent
+                                                source: root.iconPath("document_scanner")
+                                                sourceSize: Qt.size(92, 92)
+                                                mipmap: false
+                                                width: 23
+                                                height: 23
+                                            }
+                                        }
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 4
+                                            Text {
+                                                text: root.tr("ДИАГНОСТИКА", "DIAGNOSTICS")
+                                                color: faintColor
+                                                font.pixelSize: 11
+                                                font.bold: true
+                                                font.letterSpacing: 1.0
+                                            }
+                                            Text {
+                                                text: root.tr("Проверить OCR", "Verify OCR")
+                                                color: textColor
+                                                font.pixelSize: 13
+                                                font.bold: true
+                                            }
+                                            Text {
+                                                text: root.tr("Энергия и доход", "Energy and income")
+                                                color: mutedColor
+                                                font.pixelSize: 11
+                                            }
+                                        }
+                                        Button {
+                                            id: settingsScanButton
+                                            Layout.preferredWidth: 72
+                                            Layout.preferredHeight: 37
+                                            text: root.tr("Скан", "Scan")
+                                            onClicked: backend.scanState()
+                                            background: Rectangle {
+                                                radius: 10
+                                                color: settingsScanButton.hovered ? panelAlt : panelRaised
+                                                border.color: borderColor
+                                            }
+                                            contentItem: Text {
+                                                text: settingsScanButton.text
+                                                color: accentBright
+                                                font.pixelSize: 12
+                                                font.bold: true
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             Rectangle {
                                 Layout.fillWidth: true
