@@ -2211,6 +2211,43 @@ class OwnerSelectionApp:
             remaining -= step
         return not self.stop_event.is_set()
 
+    def _save_hammer_target_debug(self) -> None:
+        """Save the expected hammer hit point over the active event screen."""
+        if getattr(self, "_hammer_debug_saved", False):
+            return
+        try:
+            frame, _, client_w, client_h = self._capture_client_image()
+            reference_x, reference_y = DEFAULT_POINTS["Молоток"]
+            target_x = round(reference_x * client_w / REFERENCE_WIDTH)
+            target_y = round(reference_y * client_h / REFERENCE_HEIGHT)
+            draw = ImageDraw.Draw(frame)
+            radius = max(14, round(min(client_w, client_h) * 0.025))
+            width = max(3, round(radius / 7))
+            draw.ellipse(
+                (target_x - radius, target_y - radius, target_x + radius, target_y + radius),
+                outline="#FF3158", width=width,
+            )
+            draw.line(
+                (target_x - radius * 1.5, target_y, target_x + radius * 1.5, target_y),
+                fill="#FF3158", width=max(2, round(radius / 9)),
+            )
+            draw.line(
+                (target_x, target_y - radius * 1.5, target_x, target_y + radius * 1.5),
+                fill="#FF3158", width=max(2, round(radius / 9)),
+            )
+            debug_path = os.path.join(
+                os.path.dirname(self._config_path()), "debug_hammer_target.png"
+            )
+            frame.save(debug_path)
+            self._hammer_debug_saved = True
+            self.log(
+                f"Контроль точки молотка: клиент {client_w}×{client_h}, "
+                f"относительные координаты ({target_x}, {target_y}); снимок: {debug_path}."
+            )
+        except Exception as exc:
+            self._hammer_debug_saved = True
+            self.log(f"Не удалось сохранить контрольную точку молотка: {exc}")
+
     def _click(self, name):
         """Do not send input after a pause until the visible game state is checked."""
         was_paused = False
@@ -2259,36 +2296,6 @@ class OwnerSelectionApp:
             self.log(f"Клик «{name}» отменён: получена команда остановки.")
             return False
         x, y = self._point(name)
-        if name == "Молоток" and not getattr(self, "_hammer_debug_saved", False):
-            try:
-                frame, _, client_w, client_h = self._capture_client_image()
-                reference_x, reference_y = DEFAULT_POINTS["Молоток"]
-                target_x = round(reference_x * client_w / REFERENCE_WIDTH)
-                target_y = round(reference_y * client_h / REFERENCE_HEIGHT)
-                draw = ImageDraw.Draw(frame)
-                radius = max(14, round(min(client_w, client_h) * 0.025))
-                draw.ellipse(
-                    (target_x - radius, target_y - radius, target_x + radius, target_y + radius),
-                    outline="#FF3158", width=max(3, round(radius / 7)),
-                )
-                draw.line(
-                    (target_x - radius * 1.5, target_y, target_x + radius * 1.5, target_y),
-                    fill="#FF3158", width=max(2, round(radius / 9)),
-                )
-                draw.line(
-                    (target_x, target_y - radius * 1.5, target_x, target_y + radius * 1.5),
-                    fill="#FF3158", width=max(2, round(radius / 9)),
-                )
-                debug_path = os.path.join(os.path.dirname(self._config_path()), "debug_hammer_target.png")
-                frame.save(debug_path)
-                self._hammer_debug_saved = True
-                self.log(
-                    f"Контроль точки молотка: клиент {client_w}×{client_h}, "
-                    f"относительные координаты ({target_x}, {target_y}); снимок: {debug_path}."
-                )
-            except Exception as exc:
-                self.log(f"Не удалось сохранить контрольную точку молотка: {exc}")
-                self._hammer_debug_saved = True
         self.log(
             f"Отправляю клик «{name}»: HWND={hwnd}, экранные координаты ({x}, {y})."
         )
@@ -2474,6 +2481,10 @@ class OwnerSelectionApp:
                     self.set_status(*self.worker_error)
                     self.log("Молоток не нажимаю: начальные значения не подтверждены.")
                     return
+
+                # Capture the target even when OCR thinks the threshold is already reached.
+                # The overlay helps distinguish a wrong click point from a false-positive OCR read.
+                self._save_hammer_target_debug()
 
                 # Use the paired scan as the baseline. If the threshold is
                 # already reached, proceed to the reward screen without more clicks.
