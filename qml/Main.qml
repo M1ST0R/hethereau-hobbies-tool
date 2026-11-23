@@ -161,7 +161,7 @@ ApplicationWindow {
                 Image {
                     source: "../assets/app_icon.png"
                     sourceSize: Qt.size(96, 96)
-                    mipmap: true
+                    mipmap: false
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                 }
@@ -215,7 +215,7 @@ ApplicationWindow {
                     contentItem: Image {
                         source: root.iconPath("minimize")
                         sourceSize: Qt.size(72, 72)
-                        mipmap: true
+                        mipmap: false
                         width: 18
                         height: 18
                     }
@@ -238,7 +238,7 @@ ApplicationWindow {
                     contentItem: Image {
                         source: root.iconPath(root.visibility === Window.Maximized ? "filter_none" : "crop_square")
                         sourceSize: Qt.size(72, 72)
-                        mipmap: true
+                        mipmap: false
                         width: 18
                         height: 18
                     }
@@ -256,7 +256,7 @@ ApplicationWindow {
                     contentItem: Image {
                         source: root.iconPath("close")
                         sourceSize: Qt.size(72, 72)
-                        mipmap: true
+                        mipmap: false
                         width: 18
                         height: 18
                     }
@@ -339,7 +339,7 @@ ApplicationWindow {
                                     anchors.centerIn: parent
                                     source: root.iconPath(moduleNav.modelData.icon)
                                     sourceSize: Qt.size(80, 80)
-                                    mipmap: true
+                                    mipmap: false
                                     width: 20
                                     height: 20
                                 }
@@ -447,7 +447,7 @@ ApplicationWindow {
                                 visible: toolNav.modelData.icon !== ""
                                 source: toolNav.modelData.icon !== "" ? root.iconPath(toolNav.modelData.icon) : ""
                                 sourceSize: Qt.size(72, 72)
-                                mipmap: true
+                                mipmap: false
                                 Layout.preferredWidth: 18
                                 Layout.preferredHeight: 18
                                 opacity: toolNav.selected ? 1.0 : 0.72
@@ -594,7 +594,7 @@ ApplicationWindow {
                     contentItem: Image {
                         source: root.iconPath(root.darkMode ? "light_mode" : "dark_mode")
                         sourceSize: Qt.size(80, 80)
-                        mipmap: true
+                        mipmap: false
                         width: 20
                         height: 20
                     }
@@ -707,11 +707,11 @@ ApplicationWindow {
                                 Image {
                                     source: root.iconPath("sports_esports")
                                     sourceSize: Qt.size(2272, 2272)
-                                    mipmap: true
-                                    width: 142
-                                    height: 142
-                                    x: parent.width - 169
-                                    y: 29
+                                    mipmap: false
+                                    width: 118
+                                    height: 118
+                                    x: parent.width - 145
+                                    y: 48
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
                                     opacity: 0.94
@@ -725,22 +725,7 @@ ApplicationWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: 8
 
-                                    Rectangle {
-                                        radius: 7
-                                        color: "#28FFFFFF"
-                                        border.color: "#42FFFFFF"
-                                        Layout.preferredWidth: moduleEyebrow.implicitWidth + 18
-                                        Layout.preferredHeight: 23
-                                        Text {
-                                            id: moduleEyebrow
-                                            anchors.centerIn: parent
-                                            text: "MODULE 01   /   EVENT AUTOMATION"
-                                            color: "#E7E9FF"
-                                            font.pixelSize: 11
-                                            font.bold: true
-                                            font.letterSpacing: 1.2
-                                        }
-                                    }
+
 
                                     Text {
                                         text: root.tr("Подборка владельца", "Owner's Selection")
@@ -764,25 +749,7 @@ ApplicationWindow {
                                         Layout.fillWidth: true
                                     }
 
-                                    RowLayout {
-                                        Layout.topMargin: 2
-                                        spacing: 7
-                                        Rectangle {
-                                            width: 7
-                                            height: 7
-                                            radius: 4
-                                            color: backend.gameConnected ? "#8EF0C1" : "#FFD27A"
-                                        }
-                                        Text {
-                                            text: backend.gameConnected
-                                                ? root.tr("ИГРА ОБНАРУЖЕНА", "GAME DETECTED")
-                                                : root.tr("ОЖИДАНИЕ ИГРЫ", "WAITING FOR GAME")
-                                            color: "#E5F5FF"
-                                            font.pixelSize: 11
-                                            font.bold: true
-                                            font.letterSpacing: 1.1
-                                        }
-                                    }
+
                                 }
                             }
 
@@ -872,7 +839,7 @@ ApplicationWindow {
                                                 Image {
                                                     source: root.iconPath(backend.running && !backend.paused ? "pause" : "play_arrow")
                                                     sourceSize: Qt.size(72, 72)
-                                                    mipmap: true
+                                                    mipmap: false
                                                     width: 18
                                                     height: 18
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -904,7 +871,7 @@ ApplicationWindow {
                                                 Image {
                                                     source: root.iconPath("stop")
                                                     sourceSize: Qt.size(64, 64)
-                                                    mipmap: true
+                                                    mipmap: false
                                                     width: 16
                                                     height: 16
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -948,24 +915,7 @@ ApplicationWindow {
                                             anchors.margins: 14
                                             spacing: 7
 
-                                            RowLayout {
-                                                Layout.fillWidth: true
-                                                Text {
-                                                    text: root.tr(modelData.ru, modelData.en)
-                                                    color: mutedColor
-                                                    font.pixelSize: 11
-                                                    font.bold: true
-                                                    font.letterSpacing: 1.0
-                                                }
-                                                Item { Layout.fillWidth: true }
-                                                Image {
-                                                    source: root.iconPath(modelData.icon)
-                                                    sourceSize: Qt.size(80, 80)
-                                                    mipmap: true
-                                                    width: 20
-                                                    height: 20
-                                                }
-                                            }
+                
 
                                             Text {
                                                 text: modelData.key === "cycles" ? backend.cycles
@@ -1015,7 +965,7 @@ ApplicationWindow {
                                                 anchors.centerIn: parent
                                                 source: root.iconPath("desktop_windows")
                                                 sourceSize: Qt.size(76, 76)
-                                                mipmap: true
+                                                mipmap: false
                                                 width: 19
                                                 height: 19
                                             }
@@ -1061,7 +1011,7 @@ ApplicationWindow {
                                             contentItem: Image {
                                                 source: root.iconPath("refresh")
                                                 sourceSize: Qt.size(68, 68)
-                                                mipmap: true
+                                                mipmap: false
                                                 width: 17
                                                 height: 17
                                             }
@@ -1090,7 +1040,7 @@ ApplicationWindow {
                                                 anchors.centerIn: parent
                                                 source: root.iconPath("document_scanner")
                                                 sourceSize: Qt.size(92, 92)
-                                                mipmap: true
+                                                mipmap: false
                                                 width: 23
                                                 height: 23
                                             }
@@ -1199,7 +1149,7 @@ ApplicationWindow {
                                     height: 130
                                     source: root.iconPath("waves")
                                     sourceSize: Qt.size(520, 520)
-                                    mipmap: true
+                                    mipmap: false
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
                                     opacity: 0.9
@@ -1209,16 +1159,16 @@ ApplicationWindow {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 27
                                     anchors.right: parent.right
-                                    anchors.rightMargin: 155
+                                    anchors.rightMargin: 30
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: 12
 
                                     Text {
-                                        text: "MODULE 02   /   FIELD AUTOMATION"
+                                        text: root.tr("Рыбалка", "Fishing")
                                         color: "#D5F4F2"
-                                        font.pixelSize: 11
+                                        font.pixelSize: 15
                                         font.bold: true
-                                        font.letterSpacing: 1.5
+                                        font.letterSpacing: 0
                                     }
                                     Text {
                                         text: root.tr("Рыбалка", "Fishing")
@@ -1276,7 +1226,7 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             source: root.iconPath("auto_awesome")
                                             sourceSize: Qt.size(96, 96)
-                                            mipmap: true
+                                            mipmap: false
                                             width: 24
                                             height: 24
                                         }
@@ -1397,7 +1347,7 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             source: root.iconPath("settings")
                                             sourceSize: Qt.size(100, 100)
-                                            mipmap: true
+                                            mipmap: false
                                             width: 25
                                             height: 25
                                         }
@@ -1609,6 +1559,25 @@ ApplicationWindow {
                                 }
                             }
 
+                            RowLayout {
+                                                Layout.fillWidth: true
+                                                Text {
+                                                    text: root.tr(modelData.ru, modelData.en)
+                                                    color: mutedColor
+                                                    font.pixelSize: 11
+                                                    font.bold: true
+                                                    font.letterSpacing: 1.0
+                                                }
+                                                Item { Layout.fillWidth: true }
+                                                Image {
+                                                    source: root.iconPath(modelData.icon)
+                                                    sourceSize: Qt.size(80, 80)
+                                                    mipmap: false
+                                                    width: 20
+                                                    height: 20
+                                                }
+                                            }
+
                             Rectangle {
                                 Layout.fillWidth: true
                                 radius: 15
@@ -1671,7 +1640,7 @@ ApplicationWindow {
                                     Image {
                                         source: "../assets/app_icon.png"
                                         sourceSize: Qt.size(448, 448)
-                                        mipmap: true
+                                        mipmap: false
                                         Layout.preferredWidth: 112
                                         Layout.preferredHeight: 112
                                         fillMode: Image.PreserveAspectFit
