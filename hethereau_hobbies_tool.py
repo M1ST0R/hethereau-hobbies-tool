@@ -1726,7 +1726,25 @@ class OwnerSelectionApp:
             self.last_ocr_debug_path = debug_path
             self.last_ocr_debug_paths[debug_name] = debug_path
         except Exception:
+            debug_dir = ""
             self.last_ocr_debug_path = ""
+
+        if debug_name == "income" and debug_dir:
+            # Save a wider client-area context around the currently configured
+            # crop. This lets us locate the real counter instead of guessing
+            # coordinates from an empty 200x58 crop.
+            context_bounds = (
+                max(0, left - 300),
+                max(0, top - 80),
+                min(client_w, right + 20),
+                min(client_h, bottom + 140),
+            )
+            try:
+                context_path = os.path.join(debug_dir, "debug_income_context.png")
+                client_image.crop(context_bounds).save(context_path)
+                self.last_ocr_debug_paths["income_context"] = context_path
+            except Exception:
+                self.last_ocr_debug_paths.pop("income_context", None)
 
         if debug_name == "income":
             return self._read_income_parts(crop, min_max=min_max, expected_max=expected_max)
@@ -2104,6 +2122,9 @@ class OwnerSelectionApp:
             debug_path = self.last_ocr_debug_paths.get(counter_name)
             if debug_path:
                 self.log(f"Снимок области {counter_name}: {debug_path}")
+        income_context_path = self.last_ocr_debug_paths.get("income_context")
+        if income_context_path:
+            self.log(f"Широкий контекст области дохода: {income_context_path}")
         return None
 
     def scan_state_manual(self):
