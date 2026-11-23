@@ -10,7 +10,7 @@ import threading
 import time
 from datetime import datetime
 
-from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtCore import QObject, Property, Signal, Slot, Qt
 from PySide6.QtGui import QGuiApplication
 
 from hethereau_hobbies_tool import (
@@ -20,6 +20,10 @@ from hethereau_hobbies_tool import (
     MAX_LOG_ENTRIES,
     OwnerSelectionApp,
     configure_tesseract,
+)
+from hht_hotkeys import (
+    base_from_pynput_key, build_hotkey, display_hotkey,
+    is_valid_hotkey, modifier_from_pynput_key, hotkey_from_qt,
 )
 try:
     from pynput import keyboard
@@ -40,8 +44,6 @@ class HHTBackend(QObject):
     runStateChanged = Signal()
     hotkeysChanged = Signal()
 
-    HOTKEY_OPTIONS = tuple(f"F{number}" for number in range(1, 13))
-
     def __init__(self) -> None:
         super().__init__()
         self.core = OwnerSelectionApp.__new__(OwnerSelectionApp)
@@ -54,9 +56,11 @@ class HHTBackend(QObject):
         preferences = core._read_preferences()
         core.toggle_hotkey = preferences.get("toggle_hotkey", "F6")
         core.stop_hotkey = preferences.get("stop_hotkey", "F7")
-        if core.toggle_hotkey not in self.HOTKEY_OPTIONS:
+        core.toggle_hotkey = str(core.toggle_hotkey).upper()
+        core.stop_hotkey = str(core.stop_hotkey).upper()
+        if not is_valid_hotkey(core.toggle_hotkey):
             core.toggle_hotkey = "F6"
-        if core.stop_hotkey not in self.HOTKEY_OPTIONS or core.stop_hotkey == core.toggle_hotkey:
+        if not is_valid_hotkey(core.stop_hotkey) or core.stop_hotkey == core.toggle_hotkey:
             core.stop_hotkey = "F7" if core.toggle_hotkey != "F7" else "F8"
         core.ui_metrics = {"cycles": "0", "energy": "—", "income": "—"}
         core.current_status = "ГОТОВ К РАБОТЕ"
@@ -80,6 +84,8 @@ class HHTBackend(QObject):
         core.hotkey_listener = None
         core.hotkey_lock = threading.Lock()
         core.last_hotkey_time = {}
+        core.pressed_hotkey_modifiers = set()
+        core.ignore_hotkey_until = 0.0
         core.rescan_requested = threading.Event()
         core.pause_scan_requested = threading.Event()
         core.last_pause_scan = None
@@ -170,10 +176,6 @@ class HHTBackend(QObject):
     @Property(str, notify=hotkeysChanged)
     def stopHotkey(self) -> str:
         return self._stop_hotkey
-
-    @Property(list, constant=True)
-    def hotkeyOptions(self) -> list[str]:
-        return list(self.HOTKEY_OPTIONS)
 
     @Property(str, constant=True)
     def version(self) -> str:
@@ -295,8 +297,8 @@ class HHTBackend(QObject):
         toggle_hotkey = str(toggle_hotkey).upper()
         stop_hotkey = str(stop_hotkey).upper()
 
-        if toggle_hotkey not in self.HOTKEY_OPTIONS or stop_hotkey not in self.HOTKEY_OPTIONS:
-            self.log("Выбери клавиши F1–F12.")
+        if not is_valid_hotkey(toggle_hotkey) or not is_valid_hotkey(stop_hotkey):
+            self.log("Не удалось применить клавишу. Нажми обычную клавишу или сочетание с Ctrl, Alt, Shift или Win.")
             self.hotkeysChanged.emit()
             return
         if toggle_hotkey == stop_hotkey:
@@ -304,6 +306,7 @@ class HHTBackend(QObject):
             self.hotkeysChanged.emit()
             return
         if (toggle_hotkey, stop_hotkey) == (self._toggle_hotkey, self._stop_hotkey):
+            self.hotkeysChanged.emit()
             return
 
         self._toggle_hotkey = toggle_hotkey
@@ -313,7 +316,27 @@ class HHTBackend(QObject):
         self.core._save_preferences()
         self._start_hotkeys()
         self.hotkeysChanged.emit()
-        self.log(f"Горячие клавиши обновлены: {toggle_hotkey} / {stop_hotkey}.")
+        self.log(
+            "Горячие клавиши обновлены: "
+            f"{display_hotkey(toggle_hotkey)} / {display_hotkey(stop_hotkey)}."
+        )
+
+    @Slot(str, int, str, int)
+    def captureHotkey(self, action: str, key_code: int, key_text: str, modifiers: int) -> None:
+        if action not in ("toggle", "stop"):
+            return
+        try:
+            key_name = Qt.Key(int(key_code)).name or ""
+        except (TypeError, ValueError):
+            key_name = ""
+        shortcut = hotkey_from_qt(key_name, key_text, int(modifiers))
+        if shortcut is None:
+            self.log("Shift, Ctrl, Alt и Win нельзя назначить отдельно. Удерживай модификатор и нажми другую клавишу.")
+            return
+        if action == "toggle":
+            self.setHotkeys(shortcut, self._stop_hotkey)
+        else:
+            self.setHotkeys(self._toggle_hotkey, shortcut)
 
     @Slot(str)
     def setTheme(self, theme: str) -> None:
@@ -340,26 +363,34 @@ class HHTBackend(QObject):
                 pass
             self.core.hotkey_listener = None
 
+        with self.core.hotkey_lock:
+            self.core.pressed_hotkey_modifiers.clear()
+
         if keyboard is None:
             self.log("Глобальные клавиши недоступны; используй кнопки приложения.")
             return
 
-        toggle_key = getattr(keyboard.Key, self._toggle_hotkey.lower(), None)
-        stop_key = getattr(keyboard.Key, self._stop_hotkey.lower(), None)
-        if toggle_key is None or stop_key is None:
-            self.log("Не удалось применить выбранные горячие клавиши.")
-            return
-
         def on_press(key):
-            now = time.monotonic()
-            if key == toggle_key:
-                name = "toggle"
-            elif key == stop_key:
-                name = "stop"
-            else:
+            if time.monotonic() < getattr(self.core, "ignore_hotkey_until", 0.0):
+                return
+            modifier = modifier_from_pynput_key(key)
+            if modifier:
+                with self.core.hotkey_lock:
+                    self.core.pressed_hotkey_modifiers.add(modifier)
                 return
 
+            base = base_from_pynput_key(key)
+            if base is None:
+                return
             with self.core.hotkey_lock:
+                shortcut = build_hotkey(base, self.core.pressed_hotkey_modifiers)
+                if shortcut == self._toggle_hotkey:
+                    name = "toggle"
+                elif shortcut == self._stop_hotkey:
+                    name = "stop"
+                else:
+                    return
+                now = time.monotonic()
                 if now - self.core.last_hotkey_time.get(name, 0) < 0.45:
                     return
                 self.core.last_hotkey_time[name] = now
@@ -367,11 +398,21 @@ class HHTBackend(QObject):
             if not self.core.closed:
                 self.hotkeyRequested.emit(name)
 
+        def on_release(key):
+            modifier = modifier_from_pynput_key(key)
+            if modifier:
+                with self.core.hotkey_lock:
+                    self.core.pressed_hotkey_modifiers.discard(modifier)
+
         try:
-            listener = keyboard.Listener(on_press=on_press)
+            listener = keyboard.Listener(on_press=on_press, on_release=on_release)
             listener.daemon = True
             listener.start()
             self.core.hotkey_listener = listener
+            self.log(
+                "Глобальные клавиши активны: "
+                f"{display_hotkey(self._toggle_hotkey)} / {display_hotkey(self._stop_hotkey)}."
+            )
         except Exception as exc:
             self.log(f"Не удалось включить глобальные горячие клавиши: {exc}")
 

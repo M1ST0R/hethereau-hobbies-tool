@@ -74,3 +74,30 @@ def select_ratio_candidate(
     # losing leading digits if a weaker pass reads 70 instead of 1270.
     current, maximum, raw = max(confirmed, key=lambda item: item[0])
     return current, maximum, raw
+
+
+
+def visual_change_ratio(before, after, region, *, pixel_delta: int = 30) -> float:
+    """Return the fraction of pixels changed meaningfully inside a client-area region.
+
+    Small cursor/particle changes should not be sufficient to confirm a reward
+    transition. The before/after images must be full client-area screenshots.
+    """
+    from PIL import ImageChops
+
+    if before.size != after.size:
+        return 0.0
+    left, top, right, bottom = (int(value) for value in region)
+    left = max(0, min(before.width, left))
+    right = max(left, min(before.width, right))
+    top = max(0, min(before.height, top))
+    bottom = max(top, min(before.height, bottom))
+    if right <= left or bottom <= top:
+        return 0.0
+
+    before_crop = before.crop((left, top, right, bottom)).convert("RGB")
+    after_crop = after.crop((left, top, right, bottom)).convert("RGB")
+    difference = ImageChops.difference(before_crop, after_crop).convert("L")
+    changed = sum(difference.histogram()[pixel_delta + 1:])
+    total = (right - left) * (bottom - top)
+    return changed / total if total else 0.0

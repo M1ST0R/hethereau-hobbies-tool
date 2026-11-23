@@ -19,7 +19,7 @@ import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab, ImageTk
 import resvg_py
-from hht_ocr import parse_ratio_text, select_ratio_candidate
+from hht_ocr import parse_ratio_text, select_ratio_candidate, visual_change_ratio
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -2266,6 +2266,97 @@ class OwnerSelectionApp:
         self.log(f"Команда клика «{name}» отправлена.")
         return not self.stop_event.is_set()
 
+
+    def _confirm_reward_claim(self, timeout: float = 6.0) -> bool:
+        """Click the reward once and require a visible change before starting another cycle."""
+        try:
+            before, _, client_w, client_h = self._capture_client_image(ensure_focus=True)
+            scale_x, scale_y = client_w / REFERENCE_WIDTH, client_h / REFERENCE_HEIGHT
+            point_x, point_y = DEFAULT_POINTS["Получить"]
+            center_x, center_y = round(point_x * scale_x), round(point_y * scale_y)
+            region = (
+                max(0, center_x - 210),
+                max(0, center_y - 90),
+                min(client_w, center_x + 210),
+                min(client_h, center_y + 90),
+            )
+            debug_dir = os.path.dirname(self._config_path())
+            os.makedirs(debug_dir, exist_ok=True)
+            before.crop(region).save(os.path.join(debug_dir, "debug_reward_before.png"))
+        except Exception as exc:
+            self.worker_error = (
+                "ОШИБКА ПРОВЕРКИ НАГРАДЫ",
+                f"Не удалось сохранить контрольный кадр: {exc}",
+            )
+            self.set_status(*self.worker_error)
+            self.stop_event.set()
+            return False
+
+        if not self._click("Получить"):
+            return False
+
+        self.game_screen_context = "event_result"
+        # Move the cursor away from the button so its overlay is not mistaken
+        # for a successful screen transition.
+        try:
+            _, screen_left, screen_top, width, height = self._client_geometry()
+            pyautogui.moveTo(screen_left + max(8, width - 24), screen_top + max(8, height - 24))
+        except Exception:
+            pass
+
+        deadline = time.monotonic() + max(1.0, timeout)
+        last_image = before
+        last_ratio = 0.0
+        while time.monotonic() < deadline and not self.stop_event.is_set():
+            time.sleep(0.4)
+            try:
+                after, _, after_w, after_h = self._capture_client_image()
+            except Exception as exc:
+                self.log(f"Не удалось проверить переход с экрана награды: {exc}")
+                continue
+            if (after_w, after_h) != (client_w, client_h):
+                last_image = after
+                last_ratio = 0.0
+                continue
+            else:
+                last_ratio = visual_change_ratio(before, after, region)
+                last_image = after
+            if last_ratio >= 0.08:
+                try:
+                    last_image.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
+                except Exception:
+                    pass
+                self.log(
+                    f"Получение награды подтверждено визуальным переходом "
+                    f"(изменилось {last_ratio:.1%} пикселей контрольной области)."
+                )
+                return True
+
+        try:
+            last_image.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
+            from PIL import ImageChops
+            ImageChops.difference(before.crop(region), last_image.crop(region)).save(
+                os.path.join(debug_dir, "debug_reward_diff.png")
+            )
+        except Exception:
+            pass
+
+        if self.stop_event.is_set():
+            return False
+        self.worker_error = (
+            "НАГРАДА НЕ ПОДТВЕРЖДЕНА",
+            "Экран не изменился после нажатия «Получить». Следующий цикл не запускаю.",
+        )
+        self.set_status(*self.worker_error)
+        self.log(
+            "Переход после награды не подтверждён: контрольная область изменилась "
+            f"только на {last_ratio:.1%}. Новый магазин не открываю."
+        )
+        self.log(f"Диагностика награды: {os.path.join(debug_dir, 'debug_reward_before.png')}")
+        self.log(f"Диагностика награды: {os.path.join(debug_dir, 'debug_reward_after.png')}")
+        self.stop_event.set()
+        return False
+
     def _worker(self):
         try:
             hwnd = self._get_game_hwnd()
@@ -2540,14 +2631,18 @@ class OwnerSelectionApp:
 
                 self.set_status("ЗАВЕРШАЮ ИСПЫТАНИЕ", "Нажимаю Esc и ожидаю экран награды")
                 self._bring_game_to_front()
+                # Ignore this synthetic Escape in the global shortcut listener.
+                self.ignore_hotkey_until = time.monotonic() + 0.8
                 pyautogui.press("esc")
                 self.game_screen_context = "reward_screen"
                 if not self._wait(2.0, resume_scan="energy"):
                     break
 
                 self.set_status("ПОЛУЧАЮ НАГРАДУ", "Забираю награду за испытание")
-                self._click("Получить")
-                self.game_screen_context = "event_result"
+                if not self._confirm_reward_claim():
+                    if self.worker_error is not None:
+                        return
+                    break
                 if not self._wait(3.0, resume_scan="energy"):
                     break
 

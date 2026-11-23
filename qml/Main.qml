@@ -23,6 +23,7 @@ ApplicationWindow {
     property bool darkMode: backend.theme === "dark"
     property string currentPage: "owner"
     property string language: backend.language
+    property string activeHotkeyCapture: ""
 
     // Shared visual system. New module pages should reuse these tokens.
     readonly property color bg: darkMode ? "#0A0E18" : "#F2F4FA"
@@ -54,6 +55,18 @@ ApplicationWindow {
 
     function iconPath(name) {
         return "../assets/icons/qml/" + name + (darkMode ? "_dark.svg" : "_light.svg")
+    }
+
+    function prettyHotkey(value) {
+        const names = {
+            "CTRL": "Ctrl", "ALT": "Alt", "SHIFT": "Shift", "WIN": "Win",
+            "SPACE": "Space", "ENTER": "Enter", "ESC": "Esc",
+            "PAGE_UP": "Page Up", "PAGE_DOWN": "Page Down",
+            "LEFT": "Left", "RIGHT": "Right", "UP": "Up", "DOWN": "Down",
+            "BACKSPACE": "Backspace", "DELETE": "Delete", "INSERT": "Insert",
+            "HOME": "Home", "END": "End", "PLUS": "+"
+        }
+        return String(value).split("+").map(part => names[part] || part).join(" + ")
     }
 
     function pageIndex() {
@@ -104,8 +117,7 @@ ApplicationWindow {
         }
 
         function onHotkeysChanged() {
-            toggleHotkeyBox.currentIndex = Math.max(0, backend.hotkeyOptions.indexOf(backend.toggleHotkey))
-            stopHotkeyBox.currentIndex = Math.max(0, backend.hotkeyOptions.indexOf(backend.stopHotkey))
+            root.activeHotkeyCapture = ""
         }
 
         function onLogsChanged() {
@@ -148,7 +160,8 @@ ApplicationWindow {
 
                 Image {
                     source: "../assets/app_icon.png"
-                    sourceSize: Qt.size(24, 24)
+                    sourceSize: Qt.size(96, 96)
+                    mipmap: true
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                 }
@@ -201,7 +214,8 @@ ApplicationWindow {
                     }
                     contentItem: Image {
                         source: root.iconPath("minimize")
-                        sourceSize: Qt.size(18, 18)
+                        sourceSize: Qt.size(72, 72)
+                        mipmap: true
                         width: 18
                         height: 18
                     }
@@ -223,7 +237,8 @@ ApplicationWindow {
                     }
                     contentItem: Image {
                         source: root.iconPath(root.visibility === Window.Maximized ? "filter_none" : "crop_square")
-                        sourceSize: Qt.size(18, 18)
+                        sourceSize: Qt.size(72, 72)
+                        mipmap: true
                         width: 18
                         height: 18
                     }
@@ -240,7 +255,8 @@ ApplicationWindow {
                     }
                     contentItem: Image {
                         source: root.iconPath("close")
-                        sourceSize: Qt.size(18, 18)
+                        sourceSize: Qt.size(72, 72)
+                        mipmap: true
                         width: 18
                         height: 18
                     }
@@ -274,45 +290,6 @@ ApplicationWindow {
                 anchors.topMargin: 22
                 anchors.bottomMargin: 16
                 spacing: 0
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.bottomMargin: 34
-                    spacing: 12
-
-                    Image {
-                        source: "../assets/app_icon.png"
-                        sourceSize: Qt.size(48, 48)
-                        Layout.preferredWidth: 48
-                        Layout.preferredHeight: 48
-                        fillMode: Image.PreserveAspectFit
-                        smooth: true
-                    }
-
-                    ColumnLayout {
-                        spacing: 2
-                        Text {
-                            text: "HETHEREAU"
-                            color: accentBright
-                            font.pixelSize: 13
-                            font.bold: true
-                            font.letterSpacing: 2.0
-                        }
-                        Text {
-                            text: "HOBBIES TOOL"
-                            color: textColor
-                            font.pixelSize: 16
-                            font.bold: true
-                            font.letterSpacing: 0.8
-                        }
-                        Text {
-                            text: "AUTOMATION HUB"
-                            color: faintColor
-                            font.pixelSize: 11
-                            font.letterSpacing: 1.5
-                        }
-                    }
-                }
 
                 Text {
                     text: tr("МОДУЛИ", "HOBBY MODULES")
@@ -361,7 +338,8 @@ ApplicationWindow {
                                 Image {
                                     anchors.centerIn: parent
                                     source: root.iconPath(moduleNav.modelData.icon)
-                                    sourceSize: Qt.size(20, 20)
+                                    sourceSize: Qt.size(80, 80)
+                                    mipmap: true
                                     width: 20
                                     height: 20
                                 }
@@ -468,7 +446,8 @@ ApplicationWindow {
                             Image {
                                 visible: toolNav.modelData.icon !== ""
                                 source: toolNav.modelData.icon !== "" ? root.iconPath(toolNav.modelData.icon) : ""
-                                sourceSize: Qt.size(18, 18)
+                                sourceSize: Qt.size(72, 72)
+                                mipmap: true
                                 Layout.preferredWidth: 18
                                 Layout.preferredHeight: 18
                                 opacity: toolNav.selected ? 1.0 : 0.72
@@ -614,7 +593,8 @@ ApplicationWindow {
                     }
                     contentItem: Image {
                         source: root.iconPath(root.darkMode ? "light_mode" : "dark_mode")
-                        sourceSize: Qt.size(20, 20)
+                        sourceSize: Qt.size(80, 80)
+                        mipmap: true
                         width: 20
                         height: 20
                     }
@@ -725,8 +705,9 @@ ApplicationWindow {
                                 }
 
                                 Image {
-                                    source: "../assets/app_icon.png"
-                                    sourceSize: Qt.size(142, 142)
+                                    source: root.iconPath("sports_esports")
+                                    sourceSize: Qt.size(2272, 2272)
+                                    mipmap: true
                                     width: 142
                                     height: 142
                                     x: parent.width - 169
@@ -890,7 +871,8 @@ ApplicationWindow {
                                                 spacing: 9
                                                 Image {
                                                     source: root.iconPath(backend.running && !backend.paused ? "pause" : "play_arrow")
-                                                    sourceSize: Qt.size(18, 18)
+                                                    sourceSize: Qt.size(72, 72)
+                                                    mipmap: true
                                                     width: 18
                                                     height: 18
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -921,7 +903,8 @@ ApplicationWindow {
                                                 spacing: 8
                                                 Image {
                                                     source: root.iconPath("stop")
-                                                    sourceSize: Qt.size(16, 16)
+                                                    sourceSize: Qt.size(64, 64)
+                                                    mipmap: true
                                                     width: 16
                                                     height: 16
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -977,7 +960,8 @@ ApplicationWindow {
                                                 Item { Layout.fillWidth: true }
                                                 Image {
                                                     source: root.iconPath(modelData.icon)
-                                                    sourceSize: Qt.size(20, 20)
+                                                    sourceSize: Qt.size(80, 80)
+                                                    mipmap: true
                                                     width: 20
                                                     height: 20
                                                 }
@@ -1030,7 +1014,8 @@ ApplicationWindow {
                                             Image {
                                                 anchors.centerIn: parent
                                                 source: root.iconPath("desktop_windows")
-                                                sourceSize: Qt.size(19, 19)
+                                                sourceSize: Qt.size(76, 76)
+                                                mipmap: true
                                                 width: 19
                                                 height: 19
                                             }
@@ -1075,7 +1060,8 @@ ApplicationWindow {
                                             }
                                             contentItem: Image {
                                                 source: root.iconPath("refresh")
-                                                sourceSize: Qt.size(17, 17)
+                                                sourceSize: Qt.size(68, 68)
+                                                mipmap: true
                                                 width: 17
                                                 height: 17
                                             }
@@ -1103,7 +1089,8 @@ ApplicationWindow {
                                             Image {
                                                 anchors.centerIn: parent
                                                 source: root.iconPath("document_scanner")
-                                                sourceSize: Qt.size(23, 23)
+                                                sourceSize: Qt.size(92, 92)
+                                                mipmap: true
                                                 width: 23
                                                 height: 23
                                             }
@@ -1211,7 +1198,8 @@ ApplicationWindow {
                                     width: 130
                                     height: 130
                                     source: root.iconPath("waves")
-                                    sourceSize: Qt.size(130, 130)
+                                    sourceSize: Qt.size(520, 520)
+                                    mipmap: true
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
                                     opacity: 0.9
@@ -1287,7 +1275,8 @@ ApplicationWindow {
                                         Image {
                                             anchors.centerIn: parent
                                             source: root.iconPath("auto_awesome")
-                                            sourceSize: Qt.size(24, 24)
+                                            sourceSize: Qt.size(96, 96)
+                                            mipmap: true
                                             width: 24
                                             height: 24
                                         }
@@ -1407,7 +1396,8 @@ ApplicationWindow {
                                         Image {
                                             anchors.centerIn: parent
                                             source: root.iconPath("settings")
-                                            sourceSize: Qt.size(25, 25)
+                                            sourceSize: Qt.size(100, 100)
+                                            mipmap: true
                                             width: 25
                                             height: 25
                                         }
@@ -1475,22 +1465,43 @@ ApplicationWindow {
                                             }
                                         }
 
-                                        ComboBox {
-                                            id: toggleHotkeyBox
-                                            Layout.preferredWidth: 118
-                                            model: backend.hotkeyOptions
-                                            currentIndex: Math.max(0, backend.hotkeyOptions.indexOf(backend.toggleHotkey))
-                                            onActivated: backend.setHotkeys(currentText, stopHotkeyBox.currentText)
+                                        Button {
+                                            id: toggleHotkeyCapture
+                                            Layout.preferredWidth: 190
+                                            Layout.preferredHeight: 42
+                                            focusPolicy: Qt.StrongFocus
+                                            text: root.activeHotkeyCapture === "toggle"
+                                                ? root.tr("Нажми клавишу…", "Press any key…")
+                                                : root.prettyHotkey(backend.toggleHotkey)
+                                            onClicked: {
+                                                root.activeHotkeyCapture = "toggle"
+                                                forceActiveFocus()
+                                            }
+                                            Keys.priority: Keys.BeforeItem
+                                            Keys.onPressed: function(event) {
+                                                if (root.activeHotkeyCapture !== "toggle")
+                                                    return
+                                                if (event.key === Qt.Key_Control || event.key === Qt.Key_Alt ||
+                                                    event.key === Qt.Key_Shift || event.key === Qt.Key_Meta) {
+                                                    event.accepted = true
+                                                    return
+                                                }
+                                                backend.captureHotkey("toggle", event.key, event.text, event.modifiers)
+                                                event.accepted = true
+                                            }
                                             background: Rectangle {
                                                 radius: 9
-                                                color: panelAlt
-                                                border.color: borderColor
+                                                color: toggleHotkeyCapture.hovered || root.activeHotkeyCapture === "toggle"
+                                                    ? panelAlt : panelRaised
+                                                border.color: root.activeHotkeyCapture === "toggle" ? accentBright : borderColor
+                                                border.width: root.activeHotkeyCapture === "toggle" ? 2 : 1
                                             }
                                             contentItem: Text {
-                                                leftPadding: 10
-                                                text: toggleHotkeyBox.displayText
-                                                color: textColor
+                                                text: toggleHotkeyCapture.text
+                                                color: root.activeHotkeyCapture === "toggle" ? accentBright : textColor
                                                 font.pixelSize: 13
+                                                font.bold: root.activeHotkeyCapture === "toggle"
+                                                horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
                                             }
                                         }
@@ -1521,22 +1532,43 @@ ApplicationWindow {
                                             }
                                         }
 
-                                        ComboBox {
-                                            id: stopHotkeyBox
-                                            Layout.preferredWidth: 118
-                                            model: backend.hotkeyOptions
-                                            currentIndex: Math.max(0, backend.hotkeyOptions.indexOf(backend.stopHotkey))
-                                            onActivated: backend.setHotkeys(toggleHotkeyBox.currentText, currentText)
+                                        Button {
+                                            id: stopHotkeyCapture
+                                            Layout.preferredWidth: 190
+                                            Layout.preferredHeight: 42
+                                            focusPolicy: Qt.StrongFocus
+                                            text: root.activeHotkeyCapture === "stop"
+                                                ? root.tr("Нажми клавишу…", "Press any key…")
+                                                : root.prettyHotkey(backend.stopHotkey)
+                                            onClicked: {
+                                                root.activeHotkeyCapture = "stop"
+                                                forceActiveFocus()
+                                            }
+                                            Keys.priority: Keys.BeforeItem
+                                            Keys.onPressed: function(event) {
+                                                if (root.activeHotkeyCapture !== "stop")
+                                                    return
+                                                if (event.key === Qt.Key_Control || event.key === Qt.Key_Alt ||
+                                                    event.key === Qt.Key_Shift || event.key === Qt.Key_Meta) {
+                                                    event.accepted = true
+                                                    return
+                                                }
+                                                backend.captureHotkey("stop", event.key, event.text, event.modifiers)
+                                                event.accepted = true
+                                            }
                                             background: Rectangle {
                                                 radius: 9
-                                                color: panelAlt
-                                                border.color: borderColor
+                                                color: stopHotkeyCapture.hovered || root.activeHotkeyCapture === "stop"
+                                                    ? panelAlt : panelRaised
+                                                border.color: root.activeHotkeyCapture === "stop" ? accentBright : borderColor
+                                                border.width: root.activeHotkeyCapture === "stop" ? 2 : 1
                                             }
                                             contentItem: Text {
-                                                leftPadding: 10
-                                                text: stopHotkeyBox.displayText
-                                                color: textColor
+                                                text: stopHotkeyCapture.text
+                                                color: root.activeHotkeyCapture === "stop" ? accentBright : textColor
                                                 font.pixelSize: 13
+                                                font.bold: root.activeHotkeyCapture === "stop"
+                                                horizontalAlignment: Text.AlignHCenter
                                                 verticalAlignment: Text.AlignVCenter
                                             }
                                         }
@@ -1566,8 +1598,8 @@ ApplicationWindow {
 
                                     Text {
                                         text: root.tr(
-                                            "Можно выбрать любую пару разных функциональных клавиш F1–F12. Изменения применяются сразу.",
-                                            "Choose any two different function keys from F1–F12. Changes apply immediately."
+                                            "Нажми на поле и затем нужную клавишу. Поддерживаются буквы, цифры, функциональные, навигационные клавиши и сочетания с Ctrl, Alt, Shift или Win.",
+                                            "Click a field, then press any key. Letters, digits, function/navigation keys and Ctrl, Alt, Shift or Win combinations are supported."
                                         )
                                         color: faintColor
                                         font.pixelSize: 12
@@ -1638,7 +1670,8 @@ ApplicationWindow {
 
                                     Image {
                                         source: "../assets/app_icon.png"
-                                        sourceSize: Qt.size(112, 112)
+                                        sourceSize: Qt.size(448, 448)
+                                        mipmap: true
                                         Layout.preferredWidth: 112
                                         Layout.preferredHeight: 112
                                         fillMode: Image.PreserveAspectFit

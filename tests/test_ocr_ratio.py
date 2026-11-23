@@ -2,7 +2,9 @@
 
 import unittest
 
-from hht_ocr import parse_ratio_text, select_ratio_candidate
+from PIL import Image, ImageDraw
+
+from hht_ocr import parse_ratio_text, select_ratio_candidate, visual_change_ratio
 
 
 class SelectRatioCandidateTests(unittest.TestCase):
@@ -52,6 +54,32 @@ class SelectRatioCandidateTests(unittest.TestCase):
 
     def test_empty_candidates_are_rejected(self):
         self.assertEqual(select_ratio_candidate([]), (None, None, ""))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+
+class VisualRewardChangeTests(unittest.TestCase):
+    def test_identical_images_have_no_change(self):
+        before = Image.new("RGB", (100, 100), "black")
+        after = before.copy()
+        self.assertEqual(visual_change_ratio(before, after, (10, 10, 90, 90)), 0.0)
+
+    def test_large_button_region_change_is_detected(self):
+        before = Image.new("RGB", (100, 100), "black")
+        after = before.copy()
+        ImageDraw.Draw(after).rectangle((20, 35, 80, 65), fill="white")
+        ratio = visual_change_ratio(before, after, (10, 10, 90, 90))
+        self.assertGreaterEqual(ratio, 0.08)
+
+    def test_small_cursor_like_change_does_not_pass_reward_gate(self):
+        before = Image.new("RGB", (100, 100), "black")
+        after = before.copy()
+        ImageDraw.Draw(after).rectangle((45, 45, 50, 50), fill="white")
+        ratio = visual_change_ratio(before, after, (10, 10, 90, 90))
+        self.assertLess(ratio, 0.08)
 
 
 if __name__ == "__main__":

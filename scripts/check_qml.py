@@ -65,9 +65,6 @@ class BackendStub(QObject):
     @Property(str, notify=hotkeysChanged)
     def stopHotkey(self): return "F7"
 
-    @Property(list, constant=True)
-    def hotkeyOptions(self): return [f"F{i}" for i in range(1, 13)]
-
     @Property(str, constant=True)
     def version(self): return "0.3.0-dev.test"
 
@@ -106,6 +103,9 @@ class BackendStub(QObject):
 
     @Slot(str, str)
     def setHotkeys(self, _toggle, _stop): pass
+
+    @Slot(str, int, str, int)
+    def captureHotkey(self, _action, _key, _text, _modifiers): pass
 
     @Slot(str)
     def openUrl(self, _url): pass
