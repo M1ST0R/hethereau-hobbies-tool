@@ -721,7 +721,7 @@ ApplicationWindow {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 23
                                     anchors.right: parent.right
-                                    anchors.rightMargin: 170
+                                    anchors.rightMargin: 150
                                     anchors.verticalCenter: parent.verticalCenter
                                     spacing: 8
 
@@ -1013,9 +1013,9 @@ ApplicationWindow {
                                     spacing: 12
 
                                     Text {
-                                        text: root.tr("Рыбалка", "Fishing")
+                                        text: root.tr("Модуль в разработке", "Module in development")
                                         color: "#D5F4F2"
-                                        font.pixelSize: 15
+                                        font.pixelSize: 13
                                         font.bold: true
                                         font.letterSpacing: 0
                                     }
