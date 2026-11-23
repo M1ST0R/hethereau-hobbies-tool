@@ -11,6 +11,7 @@
   <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/releases"><img src="https://img.shields.io/github/v/release/M1ST0R/hethereau-hobbies-tool?label=latest%20release&color=ff648d" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c8fff.svg" alt="MIT license"></a>
   <a href="LICENSE-MATERIAL-SYMBOLS.txt"><img src="https://img.shields.io/badge/icons-Material%20Symbols-59cfe0.svg" alt="Material Symbols"></a>
+  <a href="https://github.com/zzstar101/awesome-nte"><img src="https://raw.githubusercontent.com/zzstar101/awesome-nte/main/assets/badge-listed.svg" alt="Listed in Awesome NTE"></a>
 </p>
 
 <h3 align="center">Один инструмент. Много хобби. Меньше рутины.</h3>
@@ -49,7 +50,7 @@
 | **Интерфейс** | English · Русский |
 | **Темы** | Светлая · Тёмная |
 | **Автоматизация** | OCR + привязка к окну игры |
-| **Горячие клавиши** | Любые клавиши и сочетания (по умолчанию F6 / F7) |
+| **Горячие клавиши** | Любые клавиши и сочетания (по умолчанию INS / DEL) |
 
 ## Технологии интерфейса
 
