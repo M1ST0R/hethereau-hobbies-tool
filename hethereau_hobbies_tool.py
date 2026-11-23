@@ -17,9 +17,9 @@ from datetime import datetime
 import customtkinter as ctk
 import pyautogui
 import pytesseract
-from PIL import Image, ImageOps, ImageGrab, ImageTk
+from PIL import Image, ImageOps, ImageGrab, ImageTk, ImageDraw
 import resvg_py
-from hht_ocr import select_ratio_candidate
+from hht_ocr import parse_ratio_text, select_ratio_candidate, visual_change_ratio
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -64,6 +64,7 @@ except ImportError:
     APP_VERSION, APP_CHANNEL = "0.3.0-dev", "dev"
 APP_GITHUB_URL = "https://github.com/M1ST0R/hethereau-hobbies-tool"
 SUPPORTED_LANGUAGES = {"en": "English", "ru": "Русский"}
+MAX_LOG_ENTRIES = 5000
 TARGET_EXE = "HTGame.exe"
 REFERENCE_WIDTH = 1600
 REFERENCE_HEIGHT = 900
@@ -83,7 +84,7 @@ MIN_INCOME_TARGET = 100  # Reject clearly truncated OCR denominators such as "1"
 CLAIM_COST = 24
 SHOP_COST_MAX = 8
 MINIMUM_ENERGY_PER_CYCLE = CLAIM_COST + SHOP_COST_MAX
-CLICK_INTERVAL = 0.05
+CLICK_INTERVAL = 0.12  # Reduce dropped hammer inputs caused by overly rapid mouse clicks
 OCR_INTERVAL = 1.0
 ENERGY_RETRY_INTERVAL = 1.5
 MAX_ENERGY_OCR_FAILURES = 8
@@ -184,8 +185,8 @@ EN_TRANSLATIONS = {
     "Завершаю текущую операцию": "Finishing the current operation",
     "Подготовка первого цикла": "Preparing the first cycle",
     "Продолжаю текущий цикл": "Resuming the current cycle",
-    "Автоматизация приостановлена. Нажми F6 для продолжения.": "Automation paused. Press F6 to resume.",
-    "Ожидаю F6 для продолжения": "Waiting for F6 to resume",
+    "Автоматизация приостановлена. Используй выбранную клавишу запуска для продолжения.": "Automation paused. Use the configured start key to resume.",
+    "Ожидаю продолжения автоматизации": "Waiting for automation to resume",
     "Проверяю, хватит ли энергии на следующий полный цикл": "Checking whether enough energy remains for another full cycle",
     "Открываю магазин события": "Opening the event shop",
     "Открываю магазин": "Opening shop",
@@ -305,7 +306,8 @@ SYMBOL_NAMES = {
     "info", "monitoring", "bolt", "payments", "check_circle", "warning",
     "error", "keyboard", "history", "fact_check", "dark_mode", "light_mode",
     "article", "open_in_new", "close", "sports_esports", "folder_open",
-    "copy_all", "delete", "check",
+    "copy_all", "delete", "check", "settings", "minimize", "crop_square",
+    "filter_none", "waves", "auto_awesome", "document_scanner",
 }
 
 # (light-mode tint, dark-mode tint); one consistent Outlined icon family.
@@ -398,6 +400,8 @@ class OwnerSelectionApp:
 
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
+        self._state_scan_lock = threading.RLock()
+        self._known_energy_max: int | None = None
         self.worker_thread: threading.Thread | None = None
         self.active_income_ocr_thread: threading.Thread | None = None
         self.hotkey_listener = None
@@ -409,6 +413,7 @@ class OwnerSelectionApp:
         self.cycle_count = 0
         self.last_ocr_meta = ""
         self.last_ocr_debug_path = ""
+        self.last_ocr_debug_paths = {}
         self.current_page = "owner"
         self.game_screen_context = "outside_event"
         self.rescan_requested = threading.Event()
@@ -424,7 +429,7 @@ class OwnerSelectionApp:
         self._build_ui()
         self.refresh_game_window(silent=True)
         self._start_hotkeys()
-        self.log("HHT готов. F6 — старт / пауза, F7 — остановка.")
+        self.log("HHT готов. Управление доступно в главной панели.")
         self.log("Открой событие «Подборка владельца» перед запуском.")
 
 
@@ -546,6 +551,10 @@ class OwnerSelectionApp:
         try:
             preferences = self._read_preferences()
             preferences.update({"language": self.language, "theme": self.theme_mode})
+            if hasattr(self, "toggle_hotkey"):
+                preferences["toggle_hotkey"] = self.toggle_hotkey
+            if hasattr(self, "stop_hotkey"):
+                preferences["stop_hotkey"] = self.stop_hotkey
             with open(self._config_path(), "w", encoding="utf-8") as config_file:
                 json.dump(preferences, config_file, ensure_ascii=False, indent=2)
         except Exception as exc:
@@ -1040,7 +1049,7 @@ class OwnerSelectionApp:
     def log(self, message: str):
         stamp = datetime.now().strftime("%H:%M:%S")
         self.log_history.append((stamp, message))
-        dropped_oldest = len(self.log_history) > 1000
+        dropped_oldest = len(self.log_history) > MAX_LOG_ENTRIES
         if dropped_oldest:
             self.log_history.pop(0)
 
@@ -1255,6 +1264,7 @@ class OwnerSelectionApp:
         self.last_resume_scan = None
         self.worker_error = None
         self.cycle_count = 0
+        self._known_energy_max = None
         self.set_metric("cycles", "0")
         self.set_status(
             "ЗАПУСК",
@@ -1386,7 +1396,7 @@ class OwnerSelectionApp:
             if self.pause_event.is_set():
                 self.set_status(
                     "ПАУЗА",
-                    "Показатели сверены. Нажми F6 для повторной проверки и продолжения.",
+                    "Показатели сверены. Используй выбранную клавишу запуска для продолжения.",
                 )
         return scan
 
@@ -1686,11 +1696,11 @@ class OwnerSelectionApp:
         expected_max: int | None = None,
         min_max: int = 1,
     ) -> tuple[int | None, int | None, str]:
-        """Read a changing current/maximum counter using OCR consensus.
+        """Read a changing current/maximum counter from one independent capture.
 
-        A partial match such as 70/1 must not be accepted. The maximum is
-        static during one event, so it must be recognized consistently by at
-        least two independent preprocessing passes before the ratio is trusted.
+        Every successful complete ratio remains provisional: _scan_game_state()
+        confirms it against a second screenshot. Several preprocessing variants
+        handle low-contrast, tinted and antialiased in-game text.
         """
         client_image, hwnd, client_w, client_h = self._capture_client_image()
         x, y, width, height = region
@@ -1709,162 +1719,267 @@ class OwnerSelectionApp:
             return None, None, "пустая область захвата"
 
         try:
-            # Keep OCR diagnostics outside PyInstaller's temporary _MEIPASS
-            # directory so they remain available after a one-file EXE closes.
             debug_dir = os.path.dirname(self._config_path())
             os.makedirs(debug_dir, exist_ok=True)
-            debug_path = os.path.join(
-                debug_dir,
-                f"debug_{debug_name}_capture.png",
-            )
+            debug_path = os.path.join(debug_dir, f"debug_{debug_name}_capture.png")
             crop.save(debug_path)
             self.last_ocr_debug_path = debug_path
+            self.last_ocr_debug_paths[debug_name] = debug_path
         except Exception:
+            debug_dir = ""
             self.last_ocr_debug_path = ""
+
+        if debug_name == "income" and debug_dir:
+            # Save a wider client-area context around the currently configured
+            # crop. This lets us locate the real counter instead of guessing
+            # coordinates from an empty 200x58 crop.
+            context_bounds = (
+                max(0, left - 300),
+                max(0, top - 80),
+                min(client_w, right + 20),
+                min(client_h, bottom + 140),
+            )
+            try:
+                context_path = os.path.join(debug_dir, "debug_income_context.png")
+                client_image.crop(context_bounds).save(context_path)
+                self.last_ocr_debug_paths["income_context"] = context_path
+            except Exception:
+                self.last_ocr_debug_paths.pop("income_context", None)
 
         if debug_name == "income":
             return self._read_income_parts(crop, min_max=min_max, expected_max=expected_max)
 
         gray = ImageOps.autocontrast(crop.convert("L"))
+        threshold = gray.point(lambda value: 255 if value >= 135 else 0)
+        inverted = ImageOps.invert(threshold)
 
-        # Two independent passes are enough for the static energy fraction.
-        # Avoid spawning 13 Tesseract processes for every cycle check.
-        candidates = []
-        for scale, psm in ((3, 7), (4, 8)):
-            enlarged = gray.resize(
-                (gray.width * scale, gray.height * scale),
+        try:
+            if debug_dir:
+                gray.save(os.path.join(debug_dir, f"debug_{debug_name}_gray.png"))
+                threshold.save(os.path.join(debug_dir, f"debug_{debug_name}_threshold.png"))
+        except Exception:
+            pass
+
+        # PSM 6/7/8/11 cover a compact ratio, a single line and sparse text.
+        # A reversed binary pass also helps when the game uses dark digits on
+        # a bright translucent panel.
+        passes = (
+            (gray, 3, 7, "gray-3x-7"),
+            (gray, 4, 8, "gray-4x-8"),
+            (threshold, 4, 7, "threshold-4x-7"),
+            (threshold, 4, 11, "threshold-4x-11"),
+            (inverted, 4, 8, "inverse-4x-8"),
+        )
+        parsed: list[tuple[int, int, str]] = []
+        diagnostics: list[str] = []
+        config_base = (
+            "--oem 3 -c tessedit_char_whitelist=0123456789/ "
+            "-c load_system_dawg=0 -c load_freq_dawg=0"
+        )
+
+        for image, scale, psm, label in passes:
+            enlarged = image.resize(
+                (image.width * scale, image.height * scale),
                 Image.Resampling.LANCZOS,
             )
-            candidates.append((enlarged, psm))
-        threshold = gray.point(lambda value: 255 if value > 150 else 0)
-        candidates.append((threshold.resize(
-            (threshold.width * 3, threshold.height * 3), Image.Resampling.LANCZOS
-        ), 7))
+            try:
+                raw = pytesseract.image_to_string(
+                    enlarged,
+                    config=f"{config_base} --psm {psm}",
+                    timeout=1.8,
+                ).strip()
+            except Exception as exc:
+                diagnostics.append(f"{label}=ошибка {type(exc).__name__}")
+                continue
 
-        parsed: list[tuple[int, int, str]] = []
-        rejected: list[str] = []
-        for candidate, psm in candidates:
-            raw = pytesseract.image_to_string(
-                candidate,
-                config=(
-                    f"--oem 3 --psm {psm} "
-                    "-c tessedit_char_whitelist=0123456789/ "
-                    "-c load_system_dawg=0 -c load_freq_dawg=0"
-                ),
-                timeout=2.5,
-            ).strip()
+            diagnostics.append(f"{label}={raw[:50]!r}" if raw else f"{label}=<пусто>")
             if not raw:
                 continue
-            compact = re.sub(r"[^0-9/]", "", raw)
-            for match in re.finditer(r"(\d{1,6})/(\d{1,6})", compact):
-                current, maximum = int(match.group(1)), int(match.group(2))
-                if maximum < min_max or maximum <= 0 or current > maximum:
-                    rejected.append(raw)
-                    continue
-                if expected_max is not None and maximum != expected_max:
-                    rejected.append(raw)
-                    continue
-                parsed.append((current, maximum, raw))
+
+            parsed.extend(parse_ratio_text(raw, expected_max=expected_max, min_max=min_max))
 
         if not parsed:
-            return None, None, rejected[-1] if rejected else ""
+            return (
+                None,
+                None,
+                "отношение не распознано; " + "; ".join(diagnostics),
+            )
 
-        # This is a provisional read of one screenshot. The caller's
-        # _scan_game_state() confirms it against a second independent capture.
         return select_ratio_candidate(parsed)
-
 
     def _read_income_parts(
         self, crop: Image.Image, min_max: int = 100, expected_max: int | None = None
     ) -> tuple[int | None, int | None, str]:
-        """Read yellow current income and white target separately.
+        """Read yellow current income and the white level target separately.
 
-        The level target is static for the active challenge. Detect it once with
-        multiple OCR passes, then reuse it and OCR only the changing numerator.
-        This avoids launching up to 17 Tesseract subprocesses every second.
+        The counter's current value can be animated and vary in brightness.
+        Use the yellow mask first, then a hue-based mask and a grayscale
+        numerator-only crop as fallbacks. The target remains independently
+        confirmed and is never mixed into the changing numerator.
         """
         rgb = crop.convert("RGB")
         width, height = rgb.size
+        debug_dir = os.path.dirname(self._config_path())
 
-        # Keep only yellow pixels from the animated current-income counter.
         yellow_mask = Image.new("L", (width, height), 0)
+        relaxed_mask = Image.new("L", (width, height), 0)
         source_pixels = rgb.load()
-        mask_pixels = yellow_mask.load()
+        yellow_pixels = yellow_mask.load()
+        relaxed_pixels = relaxed_mask.load()
+        hsv_image = rgb.convert("HSV")
+        hsv_pixels = hsv_image.load()
+
         for y in range(height):
             for x in range(width):
                 red, green, blue = source_pixels[x, y]
+                hue, saturation, value = hsv_pixels[x, y]
+                # Original strict mask plus a wider HSV range for amber/yellow
+                # text after antialiasing, scaling or transparency blending.
                 if (
-                    red > 120 and green > 80 and blue < 120
-                    and red > green * 1.10 and green > blue * 1.25
+                    red > 120 and green > 80 and blue < 140
+                    and red > green * 1.04 and green > blue * 1.18
                 ):
-                    mask_pixels[x, y] = 255
+                    yellow_pixels[x, y] = 255
+                if 10 <= hue <= 68 and saturation >= 48 and value >= 70:
+                    relaxed_pixels[x, y] = 255
 
-        def read_digits(image: Image.Image, scales, psms):
-            values: list[tuple[int, str]] = []
-            base = ImageOps.autocontrast(image.convert("L"))
+        def read_digits(image: Image.Image, method: str, scales, psms):
+            values: list[tuple[int, str, str]] = []
+            gray = image.convert("L")
+            if gray.getbbox() is None:
+                return values
+
+            base = ImageOps.autocontrast(gray)
             for scale in scales:
                 enlarged = base.resize(
                     (base.width * scale, base.height * scale),
                     Image.Resampling.LANCZOS,
                 )
                 for psm in psms:
-                    raw = pytesseract.image_to_string(
-                        enlarged,
-                        config=(
-                            f"--oem 3 --psm {psm} "
-                            "-c tessedit_char_whitelist=0123456789 "
-                            "-c load_system_dawg=0 -c load_freq_dawg=0"
-                        ),
-                        timeout=2.5,
-                    ).strip()
+                    try:
+                        raw = pytesseract.image_to_string(
+                            enlarged,
+                            config=(
+                                f"--oem 3 --psm {psm} "
+                                "-c tessedit_char_whitelist=0123456789 "
+                                "-c load_system_dawg=0 -c load_freq_dawg=0"
+                            ),
+                            timeout=1.8,
+                        ).strip()
+                    except Exception as exc:
+                        diagnostics.append(f"{method}/psm{psm}=ошибка {type(exc).__name__}")
+                        continue
+
+                    diagnostics.append(
+                        f"{method}/psm{psm}={raw[:36]!r}" if raw
+                        else f"{method}/psm{psm}=<пусто>"
+                    )
                     for token in re.findall(r"\d{1,6}", raw):
-                        values.append((int(token), raw))
+                        values.append((int(token), raw, method))
             return values
 
-        # The target is constant for one challenge. Reuse the confirmed value
-        # after the first read instead of re-running OCR on the white digits.
+        diagnostics: list[str] = []
+        yellow_pixel_count = sum(yellow_mask.getdata()) // 255
+        relaxed_pixel_count = sum(relaxed_mask.getdata()) // 255
+        try:
+            yellow_mask.save(os.path.join(debug_dir, "debug_income_current_mask.png"))
+            relaxed_mask.save(os.path.join(debug_dir, "debug_income_current_relaxed.png"))
+        except Exception:
+            pass
+
+        # The target is static during the challenge; confirm it from the right
+        # side of the counter once, then reuse it for the paired screenshot.
         if expected_max is None:
             target_crop = crop.crop((round(width * 0.54), 0, width, height))
             target_candidates = read_digits(
-                target_crop, scales=(3, 4), psms=(7, 8)
+                target_crop, "target", scales=(3, 4), psms=(7, 8)
             )
             target_candidates = [
-                item for item in target_candidates
-                if item[0] >= min_max
+                item for item in target_candidates if item[0] >= min_max
             ]
             target_votes: dict[int, int] = {}
-            for target_value, _ in target_candidates:
+            for target_value, _, _ in target_candidates:
                 target_votes[target_value] = target_votes.get(target_value, 0) + 1
+
             if not target_votes:
-                return None, None, "не удалось отдельно распознать целевой лимит"
+                return (
+                    None,
+                    None,
+                    "не удалось распознать целевой лимит; " + "; ".join(diagnostics),
+                )
 
             target, votes = max(target_votes.items(), key=lambda item: item[1])
             if votes < 2:
-                raw = target_candidates[-1][1]
-                return None, None, f"цель не подтверждена несколькими OCR-проходами: {raw!r}"
+                return (
+                    None,
+                    None,
+                    f"цель {target} не подтверждена; " + "; ".join(diagnostics),
+                )
         else:
             target = expected_max
-            votes = 2  # Previously confirmed for this running event.
+            votes = 2
 
-        # Multiple segmentation modes help retain leading digits. These passes
-        # run in the background, so they do not interrupt hammer clicks.
-        current_candidates = read_digits(
-            yellow_mask, scales=(3, 4), psms=(6, 7, 8)
-        )
-        # Income can overshoot the threshold (e.g. 2303/1900). Reject only
-        # implausibly large OCR noise, not legitimate values above target.
+        current_candidates: list[tuple[int, str, str]] = []
+        if yellow_pixel_count >= 6:
+            current_candidates = read_digits(
+                yellow_mask, "yellow", scales=(3, 4), psms=(6, 7, 8)
+            )
+
+        # If the strict mask is empty or reads only zero, retry with a wider
+        # hue range and with the numerator crop in grayscale. The denominator
+        # starts on the right, outside this crop, so it cannot become income.
+        if not current_candidates or all(item[0] == 0 for item in current_candidates):
+            if relaxed_pixel_count >= 6:
+                current_candidates.extend(
+                    read_digits(relaxed_mask, "yellow-relaxed", scales=(4,), psms=(7, 8))
+                )
+
+            numerator_crop = crop.crop((0, 0, round(width * 0.54), height))
+            numerator_gray = ImageOps.autocontrast(numerator_crop.convert("L"))
+            low, high = numerator_gray.getextrema()
+            cutoff = max(75, min(205, round(low + (high - low) * 0.56)))
+            numerator_binary = numerator_gray.point(
+                lambda value: 255 if value >= cutoff else 0
+            )
+            try:
+                numerator_binary.save(
+                    os.path.join(debug_dir, "debug_income_current_fallback.png")
+                )
+                yellow_mask.save(
+                    os.path.join(debug_dir, "debug_income_current_mask.png")
+                )
+                relaxed_mask.save(
+                    os.path.join(debug_dir, "debug_income_current_relaxed.png")
+                )
+            except Exception:
+                pass
+
+            current_candidates.extend(
+                read_digits(numerator_binary, "gray-fallback", scales=(4,), psms=(7, 8))
+            )
+
         upper_plausible = max(target * 3, target + 1000)
         valid_current = [
-            value for value, _ in current_candidates
-            if 0 <= value <= upper_plausible
+            item for item in current_candidates
+            if 0 <= item[0] <= upper_plausible
         ]
         if not valid_current:
-            return None, target, "целевой лимит найден, текущее значение дохода не распознано"
+            details = (
+                f"цель {target} распознана, числитель нет "
+                f"(yellow_px={yellow_pixel_count}, relaxed_px={relaxed_pixel_count})"
+            )
+            if diagnostics:
+                details += "; " + "; ".join(diagnostics[-10:])
+            return None, target, details
 
-        # Prefer the largest plausible value to preserve leading digits such as
-        # 1270 when another OCR pass sees only 270 or 70.
-        current = max(valid_current)
-        return current, target, f"{current}/{target}; target votes={votes}"
+        # Prefer the largest plausible candidate to preserve leading digits
+        # when a weaker pass sees only a suffix such as 270 instead of 1270.
+        current, raw, method = max(valid_current, key=lambda item: item[0])
+        return (
+            current,
+            target,
+            f"{current}/{target}; источник={method}; target votes={votes}",
+        )
 
     def read_income(self, expected_max: int | None = None):
         # The denominator is level-specific (for example 1100 or 1900).
@@ -1876,8 +1991,12 @@ class OwnerSelectionApp:
             self.set_metric("income", f"{current:,} / {maximum:,}")
         return current, maximum, raw
 
-    def read_energy(self):
-        current, maximum, raw = self._read_ratio(ENERGY_REGION, "energy")
+    def read_energy(self, expected_max: int | None = None):
+        if expected_max is None:
+            expected_max = self._known_energy_max
+        current, maximum, raw = self._read_ratio(
+            ENERGY_REGION, "energy", expected_max=expected_max
+        )
         if current is not None:
             self.set_metric("energy", f"{current} / {maximum}")
         return current, maximum, raw
@@ -1890,10 +2009,27 @@ class OwnerSelectionApp:
         attempts: int = 3,
         allow_when_stopped: bool = False,
     ) -> dict | None:
+        """Serialize scans so manual and worker OCR cannot overlap."""
+        with self._state_scan_lock:
+            return self._scan_game_state_unlocked(
+                include_income=include_income,
+                reason=reason,
+                attempts=attempts,
+                allow_when_stopped=allow_when_stopped,
+            )
+
+    def _scan_game_state_unlocked(
+        self,
+        *,
+        include_income: bool = True,
+        reason: str = "проверка состояния",
+        attempts: int = 3,
+        allow_when_stopped: bool = False,
+    ) -> dict | None:
         """Focus the game and verify counters from independent screenshots.
 
-        Energy must match exactly in two reads. Income must have a confirmed,
-        matching target and a non-decreasing current value in two reads.
+        Energy and income must both match exactly in two reads. The income
+        counter is not expected to change while the worker is waiting to click.
         Nothing should click through an ambiguous state.
         """
         if self.stop_event.is_set() and not allow_when_stopped:
@@ -1907,7 +2043,9 @@ class OwnerSelectionApp:
 
             energy_a, energy_max_a, energy_raw_a = self.read_energy()
             time.sleep(0.22)
-            energy_b, energy_max_b, energy_raw_b = self.read_energy()
+            energy_b, energy_max_b, energy_raw_b = self.read_energy(
+                expected_max=energy_max_a or self._known_energy_max
+            )
             energy_ok = (
                 energy_a is not None and energy_b is not None
                 and energy_max_a is not None and energy_max_b is not None
@@ -1921,6 +2059,10 @@ class OwnerSelectionApp:
                 "income_max": None,
                 "reason": reason,
             }
+
+            if energy_ok:
+                # Cache the maximum only after two independent reads agree.
+                self._known_energy_max = energy_max_b
 
             income_ok = not include_income
             income_raw_a = income_raw_b = ""
@@ -1937,7 +2079,7 @@ class OwnerSelectionApp:
                 income_ok = (
                     income_a is not None and income_b is not None
                     and income_max_a is not None and income_max_b == income_max_a
-                    and income_b >= income_a
+                    and income_b == income_a
                 )
                 if income_ok:
                     scan["income"] = income_b
@@ -1974,6 +2116,15 @@ class OwnerSelectionApp:
             if attempt < attempts and not self.stop_event.is_set():
                 time.sleep(0.35)
 
+        # Preserve both diagnostic crops when a paired scan fails, so the
+        # user can distinguish a wrong region from a preprocessing issue.
+        for counter_name in ("energy", "income"):
+            debug_path = self.last_ocr_debug_paths.get(counter_name)
+            if debug_path:
+                self.log(f"Снимок области {counter_name}: {debug_path}")
+        income_context_path = self.last_ocr_debug_paths.get("income_context")
+        if income_context_path:
+            self.log(f"Широкий контекст области дохода: {income_context_path}")
         return None
 
     def scan_state_manual(self):
@@ -2060,6 +2211,43 @@ class OwnerSelectionApp:
             remaining -= step
         return not self.stop_event.is_set()
 
+    def _save_hammer_target_debug(self) -> None:
+        """Save the expected hammer hit point over the active event screen."""
+        if getattr(self, "_hammer_debug_saved", False):
+            return
+        try:
+            frame, _, client_w, client_h = self._capture_client_image()
+            reference_x, reference_y = DEFAULT_POINTS["Молоток"]
+            target_x = round(reference_x * client_w / REFERENCE_WIDTH)
+            target_y = round(reference_y * client_h / REFERENCE_HEIGHT)
+            draw = ImageDraw.Draw(frame)
+            radius = max(14, round(min(client_w, client_h) * 0.025))
+            width = max(3, round(radius / 7))
+            draw.ellipse(
+                (target_x - radius, target_y - radius, target_x + radius, target_y + radius),
+                outline="#FF3158", width=width,
+            )
+            draw.line(
+                (target_x - radius * 1.5, target_y, target_x + radius * 1.5, target_y),
+                fill="#FF3158", width=max(2, round(radius / 9)),
+            )
+            draw.line(
+                (target_x, target_y - radius * 1.5, target_x, target_y + radius * 1.5),
+                fill="#FF3158", width=max(2, round(radius / 9)),
+            )
+            debug_path = os.path.join(
+                os.path.dirname(self._config_path()), "debug_hammer_target.png"
+            )
+            frame.save(debug_path)
+            self._hammer_debug_saved = True
+            self.log(
+                f"Контроль точки молотка: клиент {client_w}×{client_h}, "
+                f"относительные координаты ({target_x}, {target_y}); снимок: {debug_path}."
+            )
+        except Exception as exc:
+            self._hammer_debug_saved = True
+            self.log(f"Не удалось сохранить контрольную точку молотка: {exc}")
+
     def _click(self, name):
         """Do not send input after a pause until the visible game state is checked."""
         was_paused = False
@@ -2101,10 +2289,113 @@ class OwnerSelectionApp:
                 self.stop_event.set()
                 return False
 
-        pyautogui.click(*self._point(name))
+        # Re-acquire the game focus immediately before sending the click. The
+        # OCR scan may take several seconds and focus can change meanwhile.
+        hwnd = self._bring_game_to_front()
+        if self.stop_event.is_set():
+            self.log(f"Клик «{name}» отменён: получена команда остановки.")
+            return False
+        x, y = self._point(name)
+        self.log(
+            f"Отправляю клик «{name}»: HWND={hwnd}, экранные координаты ({x}, {y})."
+        )
+        pyautogui.click(x, y)
+        self.log(f"Команда клика «{name}» отправлена.")
         return not self.stop_event.is_set()
 
+
+    def _confirm_reward_claim(self, timeout: float = 6.0) -> bool:
+        """Click the reward once and require a visible change before starting another cycle."""
+        try:
+            before, _, client_w, client_h = self._capture_client_image(ensure_focus=True)
+            scale_x, scale_y = client_w / REFERENCE_WIDTH, client_h / REFERENCE_HEIGHT
+            point_x, point_y = DEFAULT_POINTS["Получить"]
+            center_x, center_y = round(point_x * scale_x), round(point_y * scale_y)
+            region = (
+                max(0, center_x - 210),
+                max(0, center_y - 90),
+                min(client_w, center_x + 210),
+                min(client_h, center_y + 90),
+            )
+            debug_dir = os.path.dirname(self._config_path())
+            os.makedirs(debug_dir, exist_ok=True)
+            before.crop(region).save(os.path.join(debug_dir, "debug_reward_before.png"))
+        except Exception as exc:
+            self.worker_error = (
+                "ОШИБКА ПРОВЕРКИ НАГРАДЫ",
+                f"Не удалось сохранить контрольный кадр: {exc}",
+            )
+            self.set_status(*self.worker_error)
+            self.stop_event.set()
+            return False
+
+        if not self._click("Получить"):
+            return False
+
+        self.game_screen_context = "event_result"
+        # Move the cursor away from the button so its overlay is not mistaken
+        # for a successful screen transition.
+        try:
+            _, screen_left, screen_top, width, height = self._client_geometry()
+            pyautogui.moveTo(screen_left + max(8, width - 24), screen_top + max(8, height - 24))
+        except Exception:
+            pass
+
+        deadline = time.monotonic() + max(1.0, timeout)
+        last_image = before
+        last_ratio = 0.0
+        while time.monotonic() < deadline and not self.stop_event.is_set():
+            time.sleep(0.4)
+            try:
+                after, _, after_w, after_h = self._capture_client_image()
+            except Exception as exc:
+                self.log(f"Не удалось проверить переход с экрана награды: {exc}")
+                continue
+            if (after_w, after_h) != (client_w, client_h):
+                last_image = after
+                last_ratio = 0.0
+                continue
+            else:
+                last_ratio = visual_change_ratio(before, after, region)
+                last_image = after
+            if last_ratio >= 0.08:
+                try:
+                    last_image.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
+                except Exception:
+                    pass
+                self.log(
+                    f"Получение награды подтверждено визуальным переходом "
+                    f"(изменилось {last_ratio:.1%} пикселей контрольной области)."
+                )
+                return True
+
+        try:
+            last_image.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
+            from PIL import ImageChops
+            ImageChops.difference(before.crop(region), last_image.crop(region)).save(
+                os.path.join(debug_dir, "debug_reward_diff.png")
+            )
+        except Exception:
+            pass
+
+        if self.stop_event.is_set():
+            return False
+        self.worker_error = (
+            "НАГРАДА НЕ ПОДТВЕРЖДЕНА",
+            "Экран не изменился после нажатия «Получить». Следующий цикл не запускаю.",
+        )
+        self.set_status(*self.worker_error)
+        self.log(
+            "Переход после награды не подтверждён: контрольная область изменилась "
+            f"только на {last_ratio:.1%}. Новый магазин не открываю."
+        )
+        self.log(f"Диагностика награды: {os.path.join(debug_dir, 'debug_reward_before.png')}")
+        self.log(f"Диагностика награды: {os.path.join(debug_dir, 'debug_reward_after.png')}")
+        self.stop_event.set()
+        return False
+
     def _worker(self):
+        self._hammer_debug_saved = False
         try:
             hwnd = self._get_game_hwnd()
             self._bring_game_to_front()
@@ -2114,7 +2405,7 @@ class OwnerSelectionApp:
             energy_ocr_failures = 0
             while not self.stop_event.is_set():
                 if self.pause_event.is_set():
-                    self.set_status("ПАУЗА", "Ожидаю F6 для продолжения")
+                    self.set_status("ПАУЗА", "Ожидаю продолжения автоматизации")
                     while self.pause_event.is_set() and not self.stop_event.is_set():
                         if self.pause_scan_requested.is_set():
                             self._perform_pause_scan(
@@ -2190,6 +2481,10 @@ class OwnerSelectionApp:
                     self.set_status(*self.worker_error)
                     self.log("Молоток не нажимаю: начальные значения не подтверждены.")
                     return
+
+                # Capture the target even when OCR thinks the threshold is already reached.
+                # The overlay helps distinguish a wrong click point from a false-positive OCR read.
+                self._save_hammer_target_debug()
 
                 # Use the paired scan as the baseline. If the threshold is
                 # already reached, proceed to the reward screen without more clicks.
@@ -2378,14 +2673,18 @@ class OwnerSelectionApp:
 
                 self.set_status("ЗАВЕРШАЮ ИСПЫТАНИЕ", "Нажимаю Esc и ожидаю экран награды")
                 self._bring_game_to_front()
+                # Ignore this synthetic Escape in the global shortcut listener.
+                self.ignore_hotkey_until = time.monotonic() + 0.8
                 pyautogui.press("esc")
                 self.game_screen_context = "reward_screen"
                 if not self._wait(2.0, resume_scan="energy"):
                     break
 
                 self.set_status("ПОЛУЧАЮ НАГРАДУ", "Забираю награду за испытание")
-                self._click("Получить")
-                self.game_screen_context = "event_result"
+                if not self._confirm_reward_claim():
+                    if self.worker_error is not None:
+                        return
+                    break
                 if not self._wait(3.0, resume_scan="energy"):
                     break
 

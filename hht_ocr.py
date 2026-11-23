@@ -1,5 +1,46 @@
 """Pure OCR value-selection helpers; intentionally independent of the GUI."""
 
+import re
+
+
+def parse_ratio_text(
+    raw: str,
+    *,
+    expected_max: int | None = None,
+    min_max: int = 1,
+) -> list[tuple[int, int, str]]:
+    """Parse full ratios, or a lone numerator when its denominator is trusted.
+
+    A numerator-only reading is allowed only after an independent scan has
+    established the static maximum for the current event. Multiple numbers
+    without a slash remain ambiguous and are never promoted to a ratio.
+    """
+    compact = re.sub(r"[^0-9/]", "", raw)
+    parsed: list[tuple[int, int, str]] = []
+
+    for match in re.finditer(r"(\d{1,6})/(\d{1,6})", compact):
+        current, maximum = int(match.group(1)), int(match.group(2))
+        if maximum < min_max or maximum <= 0 or current > maximum:
+            continue
+        if expected_max is not None and maximum != expected_max:
+            continue
+        parsed.append((current, maximum, raw))
+
+    if parsed or expected_max is None:
+        return parsed
+
+    digit_tokens = re.findall(r"\d{1,6}", raw)
+    if len(digit_tokens) != 1:
+        return parsed
+
+    current = int(digit_tokens[0])
+    # A lone value equal to the denominator could be the denominator itself.
+    # Refuse that ambiguous case; a full "700/700" ratio is parsed above.
+    if expected_max >= min_max and 0 <= current < expected_max:
+        parsed.append((current, expected_max, f"{raw} (ранее подтверждён максимум {expected_max})"))
+    return parsed
+
+
 def select_ratio_candidate(
     parsed: list[tuple[int, int, str]],
 ) -> tuple[int | None, int | None, str]:
@@ -33,3 +74,30 @@ def select_ratio_candidate(
     # losing leading digits if a weaker pass reads 70 instead of 1270.
     current, maximum, raw = max(confirmed, key=lambda item: item[0])
     return current, maximum, raw
+
+
+
+def visual_change_ratio(before, after, region, *, pixel_delta: int = 30) -> float:
+    """Return the fraction of pixels changed meaningfully inside a client-area region.
+
+    Small cursor/particle changes should not be sufficient to confirm a reward
+    transition. The before/after images must be full client-area screenshots.
+    """
+    from PIL import ImageChops
+
+    if before.size != after.size:
+        return 0.0
+    left, top, right, bottom = (int(value) for value in region)
+    left = max(0, min(before.width, left))
+    right = max(left, min(before.width, right))
+    top = max(0, min(before.height, top))
+    bottom = max(top, min(before.height, bottom))
+    if right <= left or bottom <= top:
+        return 0.0
+
+    before_crop = before.crop((left, top, right, bottom)).convert("RGB")
+    after_crop = after.crop((left, top, right, bottom)).convert("RGB")
+    difference = ImageChops.difference(before_crop, after_crop).convert("L")
+    changed = sum(difference.histogram()[pixel_delta + 1:])
+    total = (right - left) * (bottom - top)
+    return changed / total if total else 0.0

@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_QUICK_BACKEND", "software")
 
 from PySide6.QtCore import QObject, Property, Signal, Slot, QUrl
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QFont, QFontDatabase, QGuiApplication
 from PySide6.QtQml import QQmlApplicationEngine
 
 
@@ -24,6 +24,7 @@ class BackendStub(QObject):
     logAdded = Signal(str)
     logsReset = Signal()
     runStateChanged = Signal()
+    hotkeysChanged = Signal()
 
     @Property(str, notify=statusChanged)
     def status(self): return "READY"
@@ -57,6 +58,12 @@ class BackendStub(QObject):
 
     @Property(str, notify=themeChanged)
     def theme(self): return "dark"
+
+    @Property(str, notify=hotkeysChanged)
+    def toggleHotkey(self): return "F6"
+
+    @Property(str, notify=hotkeysChanged)
+    def stopHotkey(self): return "F7"
 
     @Property(str, constant=True)
     def version(self): return "0.3.0-dev.test"
@@ -94,16 +101,46 @@ class BackendStub(QObject):
     @Slot(str)
     def setTheme(self, _theme): pass
 
+    @Slot(str, str)
+    def setHotkeys(self, _toggle, _stop): pass
+
+    @Slot(str, int, str, int)
+    def captureHotkey(self, _action, _key, _text, _modifiers): pass
+
     @Slot(str)
     def openUrl(self, _url): pass
 
 
 def main() -> int:
     app = QGuiApplication(sys.argv[:1])
+    root = Path(__file__).resolve().parents[1]
+    font_path = root / "assets" / "fonts" / "Montserrat[wght].ttf"
+    font_id = QFontDatabase.addApplicationFont(str(font_path)) if font_path.is_file() else -1
+    font_families = QFontDatabase.applicationFontFamilies(font_id) if font_id >= 0 else []
+    if not any(family.casefold() == "montserrat" for family in font_families):
+        print("QML smoke test failed: bundled Montserrat font did not load.", file=sys.stderr)
+        return 1
+    app.setFont(QFont(font_families[0]))
+
+    required_icons = (
+        "settings", "minimize", "crop_square", "filter_none", "waves",
+        "auto_awesome", "document_scanner", "history", "dark_mode", "light_mode", "close",
+    )
+    icon_dir = root / "assets" / "icons" / "qml"
+    missing_icons = [
+        f"{name}_{theme}.svg"
+        for name in required_icons
+        for theme in ("light", "dark")
+        if not (icon_dir / f"{name}_{theme}.svg").is_file()
+    ]
+    if missing_icons:
+        print("QML smoke test failed: missing Material Symbols: " + ", ".join(missing_icons), file=sys.stderr)
+        return 1
+
     engine = QQmlApplicationEngine()
     engine.rootContext().setContextProperty("backend", BackendStub())
 
-    qml_file = Path(__file__).resolve().parents[1] / "qml" / "Main.qml"
+    qml_file = root / "qml" / "Main.qml"
     engine.load(QUrl.fromLocalFile(str(qml_file)))
 
     if not engine.rootObjects():

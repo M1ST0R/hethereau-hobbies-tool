@@ -11,6 +11,7 @@
   <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/releases"><img src="https://img.shields.io/github/v/release/M1ST0R/hethereau-hobbies-tool?label=latest%20release&color=ff648d" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c8fff.svg" alt="MIT license"></a>
   <a href="LICENSE-MATERIAL-SYMBOLS.txt"><img src="https://img.shields.io/badge/icons-Material%20Symbols-59cfe0.svg" alt="Material Symbols"></a>
+  <a href="https://github.com/zzstar101/awesome-nte"><img src="https://raw.githubusercontent.com/zzstar101/awesome-nte/main/assets/badge-listed.svg" alt="Listed in Awesome NTE"></a>
 </p>
 
 <h3 align="center">One toolkit. Many hobbies. Less repetitive work.</h3>
@@ -49,7 +50,7 @@
 | **Interface** | English · Русский |
 | **Themes** | Light · Dark |
 | **Automation** | OCR + window-bound input |
-| **Hotkeys** | `F6` Start / Pause · `F7` Stop |
+| **Hotkeys** | Capture any key or modifier combination (defaults: INS / DEL) |
 
 ## Interface technology
 
@@ -62,11 +63,14 @@ The desktop interface uses **PySide6 + Qt Quick (QML)**. The automation and OCR 
 - **Adaptive income target** — reads the target shown by the current level; no hard-coded 1100 / 1900 level table.
 - **OCR validation** — separates the changing yellow income from the static white target and confirms readings before acting.
 - **State resynchronization** — checks energy twice before each cycle, verifies energy and income after opening the shop, and rescans after resuming from a pause before sending more clicks.
-- **Live dashboard** — cycle count, energy, income, game connection, status, and hotkey hints.
-- **Integrated workspace** — a persistent sidebar switches between Owner, About, and Logs inside one application window; there are no separate utility pop-ups.
+- **Live dashboard** — cycle count, energy, income, game connection and status, without repeated shortcut hints.
+- **Control settings** — click a shortcut field and press the key or combination you want for start / pause and stop. Letters, digits, function/navigation keys and Ctrl / Alt / Shift / Win combinations are supported. Choices persist between sessions.
+- **Integrated workspace** — a persistent sidebar switches between hobby modules, Settings, About and the activity log inside one window.
+- **Custom window frame** — custom title bar, window controls, drag-to-move and edge resizing without the standard Windows frame.
 - **Selectable logs** — copy a highlighted excerpt with `Ctrl+C`, use the right-click menu, or copy the full log.
 - **Personalized interface** — language dropdown, Light / Dark switch, and saved preferences.
 - **Material Symbols Outlined** — official SVG glyphs bundled locally and tinted for the active theme. No remote font requests.
+- **UI font:** Montserrat Variable is bundled locally for consistent rendering on Windows and Linux. It is distributed under the SIL Open Font License 1.1; see [assets/fonts/OFL.txt](assets/fonts/OFL.txt).
 - **Windows elevation** — the Windows build requests Administrator privileges through UAC so HHT can send input to an elevated game process.
 
 ## Downloads
@@ -89,7 +93,7 @@ No release yet? The latest CI packages can be downloaded from **[Actions → Bui
 2. Launch HHT and approve the Windows UAC prompt.
 3. Open **Owner's Selection** in NTE.
 4. Wait until HHT finds `HTGame.exe`.
-5. Press **Start / Pause** or `F6`.
+5. Press **Start**. Change global shortcuts from the **Settings** section when needed.
 
 The packaged EXE contains a `requireAdministrator` manifest. To run from source, use `start.bat`; it requests elevation before installing Python dependencies.
 
@@ -126,9 +130,8 @@ chmod +x start.sh
 
 | Action | Control |
 |---|---|
-| Start automation | `F6` |
-| Pause / resume | `F6` |
-| Stop automation | `F7` |
+| Start / pause | Selected key in **Settings** |
+| Stop automation | Selected key in **Settings** |
 | Emergency stop | Move the cursor to the top-left screen corner |
 | Change language | Language dropdown in the header |
 | Change appearance | Light / Dark switch in the header |
@@ -151,12 +154,15 @@ Energy is accepted only when two independent screenshots agree. A single complet
 
 ## Diagnostics
 
-Use **Scan income and energy** on the Owner tab. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
+Use **Scan income and energy** in **Settings → Game window and diagnostics**. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
 
 - `debug_income_capture.png` — income counter;
-- `debug_energy_capture.png` — energy counter.
+- `debug_energy_capture.png` — original energy area; `debug_energy_gray.png` and `debug_energy_threshold.png` — processed variants.
+- `debug_income_current_mask.png`, `debug_income_current_relaxed.png`, `debug_income_current_fallback.png` — current-income OCR diagnostics.
 
-When reporting an OCR issue, attach both images and copy the recent activity log.
+`debug_hammer_target.png` — the active game screen with the expected hammer click point marked in red.
+
+When reporting an OCR or click-position issue, attach the relevant images and copy the recent activity log.
 
 ## Project direction
 
