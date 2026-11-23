@@ -17,7 +17,7 @@ from datetime import datetime
 import customtkinter as ctk
 import pyautogui
 import pytesseract
-from PIL import Image, ImageOps, ImageGrab, ImageTk
+from PIL import Image, ImageOps, ImageGrab, ImageTk, ImageDraw
 import resvg_py
 from hht_ocr import parse_ratio_text, select_ratio_candidate, visual_change_ratio
 
@@ -2259,6 +2259,36 @@ class OwnerSelectionApp:
             self.log(f"Клик «{name}» отменён: получена команда остановки.")
             return False
         x, y = self._point(name)
+        if name == "Молоток" and not getattr(self, "_hammer_debug_saved", False):
+            try:
+                frame, _, client_w, client_h = self._capture_client_image()
+                reference_x, reference_y = DEFAULT_POINTS["Молоток"]
+                target_x = round(reference_x * client_w / REFERENCE_WIDTH)
+                target_y = round(reference_y * client_h / REFERENCE_HEIGHT)
+                draw = ImageDraw.Draw(frame)
+                radius = max(14, round(min(client_w, client_h) * 0.025))
+                draw.ellipse(
+                    (target_x - radius, target_y - radius, target_x + radius, target_y + radius),
+                    outline="#FF3158", width=max(3, round(radius / 7)),
+                )
+                draw.line(
+                    (target_x - radius * 1.5, target_y, target_x + radius * 1.5, target_y),
+                    fill="#FF3158", width=max(2, round(radius / 9)),
+                )
+                draw.line(
+                    (target_x, target_y - radius * 1.5, target_x, target_y + radius * 1.5),
+                    fill="#FF3158", width=max(2, round(radius / 9)),
+                )
+                debug_path = os.path.join(os.path.dirname(self._config_path()), "debug_hammer_target.png")
+                frame.save(debug_path)
+                self._hammer_debug_saved = True
+                self.log(
+                    f"Контроль точки молотка: клиент {client_w}×{client_h}, "
+                    f"относительные координаты ({target_x}, {target_y}); снимок: {debug_path}."
+                )
+            except Exception as exc:
+                self.log(f"Не удалось сохранить контрольную точку молотка: {exc}")
+                self._hammer_debug_saved = True
         self.log(
             f"Отправляю клик «{name}»: HWND={hwnd}, экранные координаты ({x}, {y})."
         )
@@ -2358,6 +2388,7 @@ class OwnerSelectionApp:
         return False
 
     def _worker(self):
+        self._hammer_debug_saved = False
         try:
             hwnd = self._get_game_hwnd()
             self._bring_game_to_front()
