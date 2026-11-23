@@ -154,13 +154,13 @@ Energy is accepted only when two independent screenshots agree. A single complet
 
 ## Diagnostics
 
-Use **Scan income and energy** on the Owner tab. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
+Use **Scan income and energy** in **Settings → Game window and diagnostics**. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
 
 - `debug_income_capture.png` — income counter;
 - `debug_energy_capture.png` — original energy area; `debug_energy_gray.png` and `debug_energy_threshold.png` — processed variants.
 - `debug_income_current_mask.png`, `debug_income_current_relaxed.png`, `debug_income_current_fallback.png` — current-income OCR diagnostics.
 
-When reporting an OCR issue, attach both images and copy the recent activity log.
+`debug_hammer_target.png` — the active game screen with the expected hammer click point marked in red.\n\nWhen reporting an OCR or click-position issue, attach the relevant images and copy the recent activity log.
 
 ## Project direction
 
