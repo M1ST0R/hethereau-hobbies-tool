@@ -63,8 +63,10 @@ The desktop interface uses **PySide6 + Qt Quick (QML)**. The automation and OCR 
 - **Adaptive income target** — reads the target shown by the current level; no hard-coded 1100 / 1900 level table.
 - **OCR validation** — separates the changing yellow income from the static white target and confirms readings before acting.
 - **State resynchronization** — checks energy twice before each cycle, verifies energy and income after opening the shop, and rescans after resuming from a pause before sending more clicks.
-- **Live dashboard** — cycle count, energy, income, game connection and status, without repeated shortcut hints.\n- **Control settings** — click a shortcut field and press the key or combination you want for start / pause and stop. Letters, digits, function/navigation keys and Ctrl / Alt / Shift / Win combinations are supported. Choices persist between sessions.
-- **Integrated workspace** — a persistent sidebar switches between hobby modules, Settings, About and the activity log inside one window.\n- **Custom window frame** — custom title bar, window controls, drag-to-move and edge resizing without the standard Windows frame.
+- **Live dashboard** — cycle count, energy, income, game connection and status, without repeated shortcut hints.
+- **Control settings** — click a shortcut field and press the key or combination you want for start / pause and stop. Letters, digits, function/navigation keys and Ctrl / Alt / Shift / Win combinations are supported. Choices persist between sessions.
+- **Integrated workspace** — a persistent sidebar switches between hobby modules, Settings, About and the activity log inside one window.
+- **Custom window frame** — custom title bar, window controls, drag-to-move and edge resizing without the standard Windows frame.
 - **Selectable logs** — copy a highlighted excerpt with `Ctrl+C`, use the right-click menu, or copy the full log.
 - **Personalized interface** — language dropdown, Light / Dark switch, and saved preferences.
 - **Material Symbols Outlined** — official SVG glyphs bundled locally and tinted for the active theme. No remote font requests.
@@ -155,7 +157,8 @@ Energy is accepted only when two independent screenshots agree. A single complet
 Use **Scan income and energy** on the Owner tab. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
 
 - `debug_income_capture.png` — income counter;
-- `debug_energy_capture.png` — original energy area; `debug_energy_gray.png` and `debug_energy_threshold.png` — processed variants.\n- `debug_income_current_mask.png`, `debug_income_current_relaxed.png`, `debug_income_current_fallback.png` — current-income OCR diagnostics.
+- `debug_energy_capture.png` — original energy area; `debug_energy_gray.png` and `debug_energy_threshold.png` — processed variants.
+- `debug_income_current_mask.png`, `debug_income_current_relaxed.png`, `debug_income_current_fallback.png` — current-income OCR diagnostics.
 
 When reporting an OCR issue, attach both images and copy the recent activity log.
 
