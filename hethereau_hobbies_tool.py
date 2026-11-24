@@ -19,7 +19,7 @@ import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab, ImageTk, ImageDraw
 import resvg_py
-from hht_ocr import parse_ratio_text, select_ratio_candidate, visual_change_ratio
+from hht_ocr import confirm_income_pair, parse_ratio_text, select_ratio_candidate, visual_change_ratio
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -1313,6 +1313,12 @@ class OwnerSelectionApp:
                     pending_ocr.join()
                 if self.closed:
                     return
+                if self.last_scan_error:
+                    self.log(
+                        "Контрольный скан после остановки пропущен, чтобы не перезаписать "
+                        "диагностические кадры последней неудачной проверки."
+                    )
+                    return
                 result = self._scan_game_state(
                     include_income=include_income,
                     reason="после остановки",
@@ -2026,47 +2032,46 @@ class OwnerSelectionApp:
         attempts: int = 3,
         allow_when_stopped: bool = False,
     ) -> dict | None:
-        """Focus the game and verify counters from independent screenshots.
+        """Confirm each counter independently and keep already-validated reads.
 
-        Energy and income must both match exactly in two reads. The income
-        counter is not expected to change while the worker is waiting to click.
-        Nothing should click through an ambiguous state.
+        Energy must match exactly in two screenshots. Income may move by a few
+        points between screenshots because the game can add passive income
+        while OCR is running. Large differences and unconfirmed energy still
+        block every game action.
         """
         if self.stop_event.is_set() and not allow_when_stopped:
             return None
         self._bring_game_to_front()
         time.sleep(0.2)
 
+        confirmed_energy = None
+        confirmed_income = None
+        energy_raw_a = energy_raw_b = ""
+        income_raw_a = income_raw_b = ""
+
         for attempt in range(1, attempts + 1):
             if self.stop_event.is_set() and not allow_when_stopped:
                 return None
 
-            energy_a, energy_max_a, energy_raw_a = self.read_energy()
-            time.sleep(0.22)
-            energy_b, energy_max_b, energy_raw_b = self.read_energy(
-                expected_max=energy_max_a or self._known_energy_max
-            )
-            energy_ok = (
-                energy_a is not None and energy_b is not None
-                and energy_max_a is not None and energy_max_b is not None
-                and energy_a == energy_b and energy_max_a == energy_max_b
-            )
+            # Once energy has matched in two independent screenshots, keep
+            # that validated value while retrying a separate income read.
+            # Previously a later bad OCR pair could invalidate an earlier
+            # successful energy pair even though energy had not changed.
+            if confirmed_energy is None:
+                energy_a, energy_max_a, energy_raw_a = self.read_energy()
+                time.sleep(0.22)
+                energy_b, energy_max_b, energy_raw_b = self.read_energy(
+                    expected_max=energy_max_a or self._known_energy_max
+                )
+                if (
+                    energy_a is not None and energy_b is not None
+                    and energy_max_a is not None and energy_max_b is not None
+                    and energy_a == energy_b and energy_max_a == energy_max_b
+                ):
+                    confirmed_energy = (energy_b, energy_max_b)
+                    self._known_energy_max = energy_max_b
 
-            scan = {
-                "energy": energy_b if energy_ok else None,
-                "energy_max": energy_max_b if energy_ok else None,
-                "income": None,
-                "income_max": None,
-                "reason": reason,
-            }
-
-            if energy_ok:
-                # Cache the maximum only after two independent reads agree.
-                self._known_energy_max = energy_max_b
-
-            income_ok = not include_income
-            income_raw_a = income_raw_b = ""
-            if include_income:
+            if include_income and confirmed_income is None:
                 income_a, income_max_a, income_raw_a = self.read_income()
                 if income_a is not None and income_max_a is not None:
                     time.sleep(0.18)
@@ -2076,16 +2081,25 @@ class OwnerSelectionApp:
                 else:
                     income_b, income_max_b = None, None
 
-                income_ok = (
-                    income_a is not None and income_b is not None
-                    and income_max_a is not None and income_max_b == income_max_a
-                    and income_b == income_a
+                current, maximum, income_note = confirm_income_pair(
+                    income_a, income_max_a, income_b, income_max_b
                 )
-                if income_ok:
-                    scan["income"] = income_b
-                    scan["income_max"] = income_max_b
+                if current is not None and maximum is not None:
+                    confirmed_income = (current, maximum)
+                    if income_a != income_b:
+                        self.log(f"Доход подтверждён с учётом пассивного прироста: {income_note}")
+
+            energy_ok = confirmed_energy is not None
+            income_ok = not include_income or confirmed_income is not None
 
             if energy_ok and income_ok:
+                scan = {
+                    "energy": confirmed_energy[0],
+                    "energy_max": confirmed_energy[1],
+                    "income": confirmed_income[0] if include_income else None,
+                    "income_max": confirmed_income[1] if include_income else None,
+                    "reason": reason,
+                }
                 self.last_scan_error = ""
                 self.log(
                     f"Скан подтверждён ({reason}): энергия "
@@ -2116,8 +2130,8 @@ class OwnerSelectionApp:
             if attempt < attempts and not self.stop_event.is_set():
                 time.sleep(0.35)
 
-        # Preserve both diagnostic crops when a paired scan fails, so the
-        # user can distinguish a wrong region from a preprocessing issue.
+        # Preserve the last meaningful failed captures. A stop-triggered scan
+        # is skipped when this error is present, so it cannot overwrite them.
         for counter_name in ("energy", "income"):
             debug_path = self.last_ocr_debug_paths.get(counter_name)
             if debug_path:
@@ -2248,7 +2262,7 @@ class OwnerSelectionApp:
             self._hammer_debug_saved = True
             self.log(f"Не удалось сохранить контрольную точку молотка: {exc}")
 
-    def _click(self, name):
+    def _click(self, name, *, hold_seconds: float = 0.0):
         """Do not send input after a pause until the visible game state is checked."""
         was_paused = False
         while self.pause_event.is_set() and not self.stop_event.is_set():
@@ -2299,13 +2313,23 @@ class OwnerSelectionApp:
         self.log(
             f"Отправляю клик «{name}»: HWND={hwnd}, экранные координаты ({x}, {y})."
         )
-        pyautogui.click(x, y)
-        self.log(f"Команда клика «{name}» отправлена.")
+        if hold_seconds > 0:
+            pyautogui.moveTo(x, y, duration=0.08)
+            time.sleep(0.08)
+            pyautogui.mouseDown(x=x, y=y, button="left")
+            try:
+                time.sleep(hold_seconds)
+            finally:
+                pyautogui.mouseUp(x=x, y=y, button="left")
+            self.log(f"Клик «{name}» выполнен с удержанием {hold_seconds:.2f} с.")
+        else:
+            pyautogui.click(x, y)
+            self.log(f"Команда клика «{name}» отправлена.")
         return not self.stop_event.is_set()
 
 
-    def _confirm_reward_claim(self, timeout: float = 6.0) -> bool:
-        """Click the reward once and require a visible change before starting another cycle."""
+    def _confirm_reward_claim(self, timeout: float = 8.0) -> bool:
+        """Claim the reward with a deliberate press and verify the button changes."""
         try:
             before, _, client_w, client_h = self._capture_client_image(ensure_focus=True)
             scale_x, scale_y = client_w / REFERENCE_WIDTH, client_h / REFERENCE_HEIGHT
@@ -2317,80 +2341,123 @@ class OwnerSelectionApp:
                 min(client_w, center_x + 210),
                 min(client_h, center_y + 90),
             )
+            screen_x, screen_y = self._point("Получить")
             debug_dir = os.path.dirname(self._config_path())
             os.makedirs(debug_dir, exist_ok=True)
             before.crop(region).save(os.path.join(debug_dir, "debug_reward_before.png"))
+
+            marked = before.copy()
+            draw = ImageDraw.Draw(marked)
+            radius = max(18, round(min(client_w, client_h) * 0.025))
+            target_width = max(3, round(radius / 7))
+            draw.ellipse(
+                (center_x - radius, center_y - radius, center_x + radius, center_y + radius),
+                outline="#FF3158", width=target_width,
+            )
+            draw.line(
+                (center_x - radius * 1.5, center_y, center_x + radius * 1.5, center_y),
+                fill="#FF3158", width=target_width,
+            )
+            draw.line(
+                (center_x, center_y - radius * 1.5, center_x, center_y + radius * 1.5),
+                fill="#FF3158", width=target_width,
+            )
+            marked.save(os.path.join(debug_dir, "debug_reward_target.png"))
+            self.log(
+                f"Проверка кнопки «Получить»: клиент {client_w}×{client_h}, "
+                f"точка внутри окна ({center_x}, {center_y}), экранная точка "
+                f"({screen_x}, {screen_y})."
+            )
         except Exception as exc:
             self.worker_error = (
                 "ОШИБКА ПРОВЕРКИ НАГРАДЫ",
-                f"Не удалось сохранить контрольный кадр: {exc}",
+                f"Не удалось подготовить снимок кнопки: {exc}",
             )
             self.set_status(*self.worker_error)
             self.stop_event.set()
             return False
 
-        if not self._click("Получить"):
-            return False
-
         self.game_screen_context = "event_result"
-        # Move the cursor away from the button so its overlay is not mistaken
-        # for a successful screen transition.
-        try:
-            _, screen_left, screen_top, width, height = self._client_geometry()
-            pyautogui.moveTo(screen_left + max(8, width - 24), screen_top + max(8, height - 24))
-        except Exception:
-            pass
-
-        deadline = time.monotonic() + max(1.0, timeout)
         last_image = before
         last_ratio = 0.0
-        while time.monotonic() < deadline and not self.stop_event.is_set():
-            time.sleep(0.4)
+        holds = (0.12, 0.18, 0.24)
+        max_attempts = len(holds)
+        deadline = time.monotonic() + max(timeout, 4.0)
+
+        for attempt, hold_seconds in enumerate(holds, start=1):
+            if self.stop_event.is_set():
+                return False
+
+            self.log(
+                f"Забираю награду: попытка {attempt}/{max_attempts}, "
+                f"удержание кнопки {hold_seconds:.2f} с."
+            )
+            if not self._click("Получить", hold_seconds=hold_seconds):
+                return False
+
+            # Move away after release so hover effects cannot look like a claim.
             try:
-                after, _, after_w, after_h = self._capture_client_image()
+                _, screen_left, screen_top, width, height = self._client_geometry()
+                pyautogui.moveTo(
+                    screen_left + max(8, width - 24),
+                    screen_top + max(8, height - 24),
+                    duration=0.05,
+                )
+            except Exception:
+                pass
+
+            time.sleep(0.85)
+            try:
+                after, _, after_w, after_h = self._capture_client_image(ensure_focus=True)
             except Exception as exc:
-                self.log(f"Не удалось проверить переход с экрана награды: {exc}")
+                self.log(f"Не удалось проверить нажатие «Получить»: {exc}")
                 continue
+
             if (after_w, after_h) != (client_w, client_h):
                 last_image = after
                 last_ratio = 0.0
                 continue
-            else:
-                last_ratio = visual_change_ratio(before, after, region)
-                last_image = after
-            if last_ratio >= 0.08:
-                try:
-                    last_image.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
-                except Exception:
-                    pass
+
+            last_image = after
+            last_ratio = visual_change_ratio(before, after, region)
+            try:
+                after.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
+                from PIL import ImageChops
+                ImageChops.difference(before.crop(region), after.crop(region)).save(
+                    os.path.join(debug_dir, "debug_reward_diff.png")
+                )
+            except Exception:
+                pass
+
+            if last_ratio >= 0.05:
                 self.log(
-                    f"Получение награды подтверждено визуальным переходом "
-                    f"(изменилось {last_ratio:.1%} пикселей контрольной области)."
+                    f"Получение награды подтверждено: контрольная область изменилась "
+                    f"на {last_ratio:.1%} после попытки {attempt}."
                 )
                 return True
 
-        try:
-            last_image.crop(region).save(os.path.join(debug_dir, "debug_reward_after.png"))
-            from PIL import ImageChops
-            ImageChops.difference(before.crop(region), last_image.crop(region)).save(
-                os.path.join(debug_dir, "debug_reward_diff.png")
+            self.log(
+                f"После попытки {attempt} кнопка «Получить» визуально не изменилась "
+                f"({last_ratio:.1%}); проверю повторное нажатие."
             )
-        except Exception:
-            pass
+            if time.monotonic() >= deadline and attempt < max_attempts:
+                self.log("Время проверки награды истекло.")
+                break
 
         if self.stop_event.is_set():
             return False
         self.worker_error = (
             "НАГРАДА НЕ ПОДТВЕРЖДЕНА",
-            "Экран не изменился после нажатия «Получить». Следующий цикл не запускаю.",
+            "После трёх нажатий кнопка «Получить» не изменилась. Следующий цикл не запускаю.",
         )
         self.set_status(*self.worker_error)
         self.log(
-            "Переход после награды не подтверждён: контрольная область изменилась "
-            f"только на {last_ratio:.1%}. Новый магазин не открываю."
+            f"Переход после награды не подтверждён после {max_attempts} нажатий: "
+            f"изменение контрольной области {last_ratio:.1%}. Новый магазин не открываю."
         )
-        self.log(f"Диагностика награды: {os.path.join(debug_dir, 'debug_reward_before.png')}")
-        self.log(f"Диагностика награды: {os.path.join(debug_dir, 'debug_reward_after.png')}")
+        self.log(f"Диагностика кнопки: {os.path.join(debug_dir, 'debug_reward_before.png')}")
+        self.log(f"Диагностика кнопки: {os.path.join(debug_dir, 'debug_reward_target.png')}")
+        self.log(f"Диагностика кнопки: {os.path.join(debug_dir, 'debug_reward_after.png')}")
         self.stop_event.set()
         return False
 
@@ -2461,6 +2528,9 @@ class OwnerSelectionApp:
                 if not self._wait(2.0, resume_scan="both"):
                     break
 
+                # Save a fresh target overlay before OCR can abort this cycle.
+                self._save_hammer_target_debug()
+
                 self.set_status(
                     "СИНХРОНИЗАЦИЯ СЧЁТЧИКОВ",
                     "Перед молотком проверяю энергию и целевой доход двумя снимками",
@@ -2481,10 +2551,6 @@ class OwnerSelectionApp:
                     self.set_status(*self.worker_error)
                     self.log("Молоток не нажимаю: начальные значения не подтверждены.")
                     return
-
-                # Capture the target even when OCR thinks the threshold is already reached.
-                # The overlay helps distinguish a wrong click point from a false-positive OCR read.
-                self._save_hammer_target_debug()
 
                 # Use the paired scan as the baseline. If the threshold is
                 # already reached, proceed to the reward screen without more clicks.
