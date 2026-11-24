@@ -194,26 +194,21 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository for tag creation
-        if: github.event_name == 'workflow_dispatch' && inputs.release_version != ''
+      - name: Check out repository for release notes
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Create version tag for manual release
-        if: github.event_name == 'workflow_dispatch' && inputs.release_version != ''
+      - name: Prepare curated release notes
+        shell: bash
         env:
-          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.release_version || github.ref_name }}
         run: |
-          TAG="v${RELEASE_VERSION}"
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists."
-            exit 1
+          VERSION="${RELEASE_VERSION#v}"
+          NOTES_SOURCE="docs/releases/v${VERSION}.md"
+          if [[ -f "$NOTES_SOURCE" ]]; then
+            cp "$NOTES_SOURCE" release-notes.md
+          else
+            : > release-notes.md
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "HHT $TAG"
-          git push origin "$TAG"
 
       - name: Download all release packages
         uses: actions/download-artifact@v4
@@ -223,12 +218,15 @@ jobs:
           merge-multiple: true
 
       - name: Publish release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.release_version) || github.ref_name }}
           name: HHT ${{ github.event_name == 'workflow_dispatch' && format('v{0}', inputs.release_version) || github.ref_name }}
+          target_commitish: ${{ github.sha }}
           prerelease: ${{ contains(github.event_name == 'workflow_dispatch' && inputs.release_version || github.ref_name, '-') }}
           generate_release_notes: true
+          body_path: release-notes.md
+          fail_on_unmatched_files: true
           files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ github.token }}

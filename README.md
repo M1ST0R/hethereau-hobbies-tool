@@ -62,7 +62,7 @@ The desktop interface uses **PySide6 + Qt Quick (QML)**. The automation and OCR 
 - **Owner's Selection module** — opens the event shop, taps the hammer, tracks income, claims the challenge reward, checks energy, and repeats while possible.
 - **Adaptive income target** — reads the target shown by the current level; no hard-coded 1100 / 1900 level table.
 - **OCR validation** — separates the changing yellow income from the static white target and confirms readings before acting.
-- **State resynchronization** — checks energy twice before each cycle, verifies energy and income after opening the shop, and rescans after resuming from a pause before sending more clicks.
+- **State resynchronization** — confirms energy twice on the event start menu, reads income during the challenge, and rescans the visible counter after resuming from a pause. Ambiguous readings block further clicks.
 - **Live dashboard** — cycle count, energy, income, game connection and status, without repeated shortcut hints.
 - **Control settings** — click a shortcut field and press the key or combination you want for start / pause and stop. Letters, digits, function/navigation keys and Ctrl / Alt / Shift / Win combinations are supported. Choices persist between sessions.
 - **Integrated workspace** — a persistent sidebar switches between hobby modules, Settings, About and the activity log inside one window.
@@ -148,13 +148,13 @@ To reduce mistakes such as reading `1270/1900` as `70/1`, the Owner's Selection 
 2. Confirms the static target with independent OCR passes.
 3. Reuses the confirmed target during the active challenge.
 4. Prefers valid readings that preserve leading digits and preserves income values that overshoot the target, such as `2303/1900`.
-5. Requires the target to be reached in consecutive reads before leaving the event.
+5. Stops hammer input when the target is detected and performs a fresh paired confirmation before leaving the event.
 
-Energy is accepted only when two independent screenshots agree. A single complete OCR ratio is provisional until the second screenshot confirms it. The first run on a new resolution or level should be supervised.
+Energy OCR is restricted to the event start menu (the screen with the **Start** button), because the same screen area displays a different value during gameplay. During the challenge HHT reads income only. Energy is accepted only when two independent screenshots agree; a single complete OCR ratio remains provisional until the second screenshot confirms it. Supervise the first run on a new resolution or level.
 
 ## Diagnostics
 
-Use **Scan income and energy** in **Settings → Game window and diagnostics**. HHT captures both counters twice and only accepts stable readings. The automation repeats these checks when starting a cycle, after opening the event shop, and after resuming from pause. If either counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
+Use **Scan visible counter** in **Settings → Game window and diagnostics**. HHT scans the counter appropriate to the current screen: energy in the event start menu and income during the challenge. The selected counter is captured twice and only stable readings are accepted. Automation performs screen-specific checks when starting a cycle, after opening the event shop, and after resuming from pause. If the required counter cannot be confirmed, HHT does not continue clicking. Captured counter regions are saved in the HHT user configuration folder:
 
 - `debug_income_capture.png` — income counter;
 - `debug_energy_capture.png` — original energy area; `debug_energy_gray.png` and `debug_energy_threshold.png` — processed variants.
