@@ -85,7 +85,8 @@ CLAIM_COST = 24
 SHOP_COST_MAX = 8
 MINIMUM_ENERGY_PER_CYCLE = CLAIM_COST + SHOP_COST_MAX
 CLICK_INTERVAL = 0.12  # Reduce dropped hammer inputs caused by overly rapid mouse clicks
-OCR_INTERVAL = 1.0
+OCR_INTERVAL = 0.55  # One background OCR task at a time.
+SHOP_SETTLE_SECONDS = 1.25
 ENERGY_RETRY_INTERVAL = 1.5
 MAX_ENERGY_OCR_FAILURES = 8
 def configure_tesseract():
@@ -1701,6 +1702,7 @@ class OwnerSelectionApp:
         debug_name="ocr",
         expected_max: int | None = None,
         min_max: int = 1,
+        captured=None,
     ) -> tuple[int | None, int | None, str]:
         """Read a changing current/maximum counter from one independent capture.
 
@@ -1708,7 +1710,9 @@ class OwnerSelectionApp:
         confirms it against a second screenshot. Several preprocessing variants
         handle low-contrast, tinted and antialiased in-game text.
         """
-        client_image, hwnd, client_w, client_h = self._capture_client_image()
+        if captured is None:
+            captured = self._capture_client_image()
+        client_image, hwnd, client_w, client_h = captured
         x, y, width, height = region
         sx, sy = client_w / REFERENCE_WIDTH, client_h / REFERENCE_HEIGHT
         left = max(0, round(x * sx))
@@ -1803,6 +1807,9 @@ class OwnerSelectionApp:
                 continue
 
             parsed.extend(parse_ratio_text(raw, expected_max=expected_max, min_max=min_max))
+            # The second independent frame is still required by the scanner.
+            if parsed:
+                break
 
         if not parsed:
             return (
@@ -1987,21 +1994,22 @@ class OwnerSelectionApp:
             f"{current}/{target}; источник={method}; target votes={votes}",
         )
 
-    def read_income(self, expected_max: int | None = None):
+    def read_income(self, expected_max: int | None = None, captured=None):
         # The denominator is level-specific (for example 1100 or 1900).
         # Once detected, pass it back to avoid repeating OCR on static digits.
         current, maximum, raw = self._read_ratio(
-            INCOME_REGION, "income", expected_max=expected_max, min_max=MIN_INCOME_TARGET
+            INCOME_REGION, "income", expected_max=expected_max,
+            min_max=MIN_INCOME_TARGET, captured=captured
         )
         if current is not None and maximum is not None:
             self.set_metric("income", f"{current:,} / {maximum:,}")
         return current, maximum, raw
 
-    def read_energy(self, expected_max: int | None = None):
+    def read_energy(self, expected_max: int | None = None, captured=None):
         if expected_max is None:
             expected_max = self._known_energy_max
         current, maximum, raw = self._read_ratio(
-            ENERGY_REGION, "energy", expected_max=expected_max
+            ENERGY_REGION, "energy", expected_max=expected_max, captured=captured
         )
         if current is not None:
             self.set_metric("energy", f"{current} / {maximum}")
@@ -2041,27 +2049,31 @@ class OwnerSelectionApp:
         """
         if self.stop_event.is_set() and not allow_when_stopped:
             return None
+        scan_started = time.perf_counter()
         self._bring_game_to_front()
-        time.sleep(0.2)
+        time.sleep(0.12)
 
         confirmed_energy = None
         confirmed_income = None
         energy_raw_a = energy_raw_b = ""
         income_raw_a = income_raw_b = ""
+        energy_a = energy_b = energy_max_a = energy_max_b = None
+        income_a = income_b = income_max_a = income_max_b = None
 
         for attempt in range(1, attempts + 1):
             if self.stop_event.is_set() and not allow_when_stopped:
                 return None
 
-            # Once energy has matched in two independent screenshots, keep
-            # that validated value while retrying a separate income read.
-            # Previously a later bad OCR pair could invalidate an earlier
-            # successful energy pair even though energy had not changed.
+            # Capture only two frames and reuse them for both counters.
+            frame_a = self._capture_client_image()
+            time.sleep(0.12)
+            frame_b = self._capture_client_image()
+
             if confirmed_energy is None:
-                energy_a, energy_max_a, energy_raw_a = self.read_energy()
-                time.sleep(0.22)
+                energy_a, energy_max_a, energy_raw_a = self.read_energy(captured=frame_a)
                 energy_b, energy_max_b, energy_raw_b = self.read_energy(
-                    expected_max=energy_max_a or self._known_energy_max
+                    expected_max=energy_max_a or self._known_energy_max,
+                    captured=frame_b,
                 )
                 if (
                     energy_a is not None and energy_b is not None
@@ -2072,11 +2084,10 @@ class OwnerSelectionApp:
                     self._known_energy_max = energy_max_b
 
             if include_income and confirmed_income is None:
-                income_a, income_max_a, income_raw_a = self.read_income()
+                income_a, income_max_a, income_raw_a = self.read_income(captured=frame_a)
                 if income_a is not None and income_max_a is not None:
-                    time.sleep(0.18)
                     income_b, income_max_b, income_raw_b = self.read_income(
-                        expected_max=income_max_a
+                        expected_max=income_max_a, captured=frame_b
                     )
                 else:
                     income_b, income_max_b = None, None
@@ -2102,7 +2113,8 @@ class OwnerSelectionApp:
                 }
                 self.last_scan_error = ""
                 self.log(
-                    f"Скан подтверждён ({reason}): энергия "
+                    f"Скан подтверждён ({reason}) за "
+                    f"{(time.perf_counter() - scan_started) * 1000:.0f} мс: энергия "
                     f"{scan['energy']}/{scan['energy_max']}"
                     + (
                         f", доход {scan['income']}/{scan['income_max']}."
@@ -2525,7 +2537,7 @@ class OwnerSelectionApp:
                     if self.worker_error is not None or self.stop_event.is_set():
                         break
                 self.game_screen_context = "owner_selection"
-                if not self._wait(2.0, resume_scan="both"):
+                if not self._wait(SHOP_SETTLE_SECONDS, resume_scan="both"):
                     break
 
                 # Save a fresh target overlay before OCR can abort this cycle.
@@ -2564,6 +2576,7 @@ class OwnerSelectionApp:
                 )
                 last_ocr = time.monotonic()
                 last_seen = time.monotonic()
+                last_income_value = current_at_open
                 reached = current_at_open >= active_income_target
                 reached_confirmations = 2 if reached else 0
                 if reached:
@@ -2656,9 +2669,14 @@ class OwnerSelectionApp:
                         break
                     now = time.monotonic()
 
+                    near_target = (
+                        active_income_target - last_income_value
+                        <= max(75, round(active_income_target * 0.07))
+                    )
+                    next_ocr_interval = 0.25 if near_target else OCR_INTERVAL
                     if (
                         income_thread is None
-                        and now - last_ocr >= OCR_INTERVAL
+                        and now - last_ocr >= next_ocr_interval
                     ):
                         income_result = {}
                         income_thread = threading.Thread(
@@ -2692,6 +2710,7 @@ class OwnerSelectionApp:
                         now = time.monotonic()
 
                         if current is not None and maximum is not None:
+                            last_income_value = current
                             last_seen = now
                             if active_income_target != maximum:
                                 active_income_target = maximum
