@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace = "com.m1stor.hhtmobile"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.m1stor.hhtmobile"

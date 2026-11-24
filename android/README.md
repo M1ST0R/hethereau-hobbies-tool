@@ -38,7 +38,7 @@ The current prototype does not request Accessibility access and does not simulat
 Requirements:
 
 - JDK 17
-- Android SDK Platform 37
+- Android SDK Platform 36
 - Android SDK Build Tools 36.0.0
 - Gradle 9.6.0
 - Android Gradle Plugin 9.5.0
