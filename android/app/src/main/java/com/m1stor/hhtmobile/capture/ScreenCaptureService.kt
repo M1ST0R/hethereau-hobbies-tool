@@ -113,6 +113,7 @@ class ScreenCaptureService : Service() {
             startAsForegroundService()
             val manager = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
             val activeProjection = manager.getMediaProjection(resultCode, resultData)
+                ?: throw IllegalStateException("Android did not create a MediaProjection session")
             projection = activeProjection
 
             val callback = object : MediaProjection.Callback() {
