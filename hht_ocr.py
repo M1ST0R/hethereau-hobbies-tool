@@ -41,6 +41,48 @@ def parse_ratio_text(
     return parsed
 
 
+def confirm_income_pair(
+    current_a: int | None,
+    maximum_a: int | None,
+    current_b: int | None,
+    maximum_b: int | None,
+) -> tuple[int | None, int | None, str]:
+    """Reconcile two adjacent income reads while allowing tiny passive increments.
+
+    The game can add a few income points between screenshots even before the
+    hammer loop begins. Accept only the same confirmed target and a small
+    difference; return the larger reading so the worker never underestimates
+    progress. Large changes and target mismatches remain unconfirmed.
+    """
+    if (
+        current_a is None or current_b is None
+        or maximum_a is None or maximum_b is None
+        or maximum_a != maximum_b
+        or maximum_a <= 0
+    ):
+        return None, None, "доход не подтверждён: отсутствует значение или различается целевой лимит"
+
+    tolerance = max(6, min(25, round(maximum_a * 0.01)))
+    difference = abs(current_b - current_a)
+    if difference > tolerance:
+        return (
+            None,
+            None,
+            f"доход скачет сильнее допустимого: {current_a}/{maximum_a} → "
+            f"{current_b}/{maximum_b} (допуск {tolerance})",
+        )
+
+    selected = max(current_a, current_b)
+    if difference:
+        return (
+            selected,
+            maximum_a,
+            f"{current_a} → {current_b}; принято {selected}/{maximum_a} "
+            f"(небольшое изменение за время сканирования, допуск {tolerance})",
+        )
+    return selected, maximum_a, f"{selected}/{maximum_a}; два снимка совпали"
+
+
 def select_ratio_candidate(
     parsed: list[tuple[int, int, str]],
 ) -> tuple[int | None, int | None, str]:
