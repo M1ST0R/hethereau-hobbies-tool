@@ -174,7 +174,7 @@ EN_TRANSLATIONS = {
     "▶  Запустить / Пауза  ·  F6": "▶  Start / Pause  ·  F6",
     "■  Стоп  ·  F7": "■  Stop  ·  F7",
     "Проверить распознавание": "Test OCR",
-    "Сканировать доход и энергию": "Scan income and energy",
+    "Сканировать текущий показатель": "Scan visible counter",
     "Запуск / пауза": "Start / pause",
     "Остановить": "Stop",
     "ЖУРНАЛ": "ACTIVITY LOG",
@@ -858,7 +858,7 @@ class OwnerSelectionApp:
         self.stop_button.pack(side="left", padx=(6, 0))
 
         self.ocr_button = ctk.CTkButton(
-            outer, text=self.tr("Сканировать доход и энергию"),
+            outer, text=self.tr("Сканировать текущий показатель"),
             image=self.symbol_image("fact_check", 18, "muted"), compound="left", height=34,
             fg_color="transparent", hover_color=PANEL_ALT,
             border_width=1, border_color=BORDER, text_color=MUTED,
@@ -1247,19 +1247,27 @@ class OwnerSelectionApp:
                 self.last_pause_scan = None
                 self.last_resume_scan = None
                 self.pause_event.clear()
-                self.set_status(
-                    "ПРОВЕРКА ПОСЛЕ ПАУЗЫ",
-                    "Сначала заново проверю доход и энергию. До подтверждения кликов не будет.",
+                resume_hint = (
+                    "Сначала проверю энергию в меню события."
+                    if self.game_screen_context == "outside_event"
+                    else "Сначала заново проверю доход на экране испытания."
+                    if self.game_screen_context == "owner_selection"
+                    else "На переходном экране OCR не запускаю; продолжу после смены экрана."
                 )
-                self.log("Пауза снята. Запрошен контрольный скан дохода и энергии.")
+                self.set_status("ПРОВЕРКА ПОСЛЕ ПАУЗЫ", resume_hint)
+                self.log("Пауза снята. Запрошена проверка счётчика, соответствующего текущему экрану.")
             else:
                 self.pause_event.set()
                 self.pause_scan_requested.set()
-                self.set_status(
-                    "ПАУЗА",
-                    "Ввод остановлен. Сверяю доход и энергию на текущем экране.",
+                pause_hint = (
+                    "Ввод остановлен. Проверю энергию в меню события."
+                    if self.game_screen_context == "outside_event"
+                    else "Ввод остановлен. Проверю доход на экране испытания."
+                    if self.game_screen_context == "owner_selection"
+                    else "Ввод остановлен. На переходном экране OCR пропускается."
                 )
-                self.log("Пауза включена. Запрошен скан текущего состояния.")
+                self.set_status("ПАУЗА", pause_hint)
+                self.log("Пауза включена. Запрошен скан подходящего для текущего экрана счётчика.")
             return
 
         self.stop_event.clear()
@@ -1275,7 +1283,7 @@ class OwnerSelectionApp:
         self.set_metric("cycles", "0")
         self.set_status(
             "ЗАПУСК",
-            "Сначала проверю энергию, затем открою магазин и сверю оба счётчика.",
+            "Сначала проверю энергию в меню события, затем — доход после нажатия «Начать».",
         )
         self.log("Автоматизация запущена. Перед первым действием будет проверена энергия.")
         self.worker_thread = threading.Thread(target=self._worker, daemon=True)
@@ -1421,7 +1429,7 @@ class OwnerSelectionApp:
             self.log(
                 f"Скан при паузе не подтверждён ({reason}): "
                 f"{self.last_scan_error or 'счётчики не прочитаны'}. "
-                "При возобновлении будет выполнен новый полный скан."
+                "При возобновлении будет проверен нужный для текущего экрана счётчик."
             )
             if self.pause_event.is_set():
                 self.set_status(
@@ -2106,10 +2114,10 @@ class OwnerSelectionApp:
     ) -> dict | None:
         """Confirm each counter independently and keep already-validated reads.
 
-        Energy must match exactly in two screenshots. Income may move by a few
-        points between screenshots because the game can add passive income
-        while OCR is running. Large differences and unconfirmed energy still
-        block every game action.
+        Energy is scanned only when include_energy is requested (the event menu).
+        It must match exactly in two screenshots. Income may move by a few points
+        because the game can add passive income while OCR is running. Each requested
+        counter must be confirmed before the caller proceeds.
         """
         if self.stop_event.is_set() and not allow_when_stopped:
             return None

@@ -34,13 +34,14 @@ class PrecisionIncomeModeTests(unittest.TestCase):
     def test_precision_mode_starts_in_final_thirty_percent(self):
         self.assertFalse(should_enter_precision_mode(1049, 1500))
         self.assertTrue(should_enter_precision_mode(1050, 1500))
-        self.assertTrue(should_enter_precision_mode(1329, 1900))
-        self.assertFalse(should_enter_precision_mode(1328, 1900))
+        self.assertTrue(should_enter_precision_mode(1330, 1900))
+        self.assertFalse(should_enter_precision_mode(1329, 1900))
 
     def test_precision_mode_handles_missing_or_invalid_values(self):
         self.assertFalse(should_enter_precision_mode(None, 1500))
         self.assertFalse(should_enter_precision_mode(1400, None))
         self.assertFalse(should_enter_precision_mode(0, 0))
+        self.assertTrue(should_enter_precision_mode(1600, 1500))
 
     def test_precision_mode_rejects_invalid_window(self):
         with self.assertRaises(ValueError):
