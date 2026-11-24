@@ -2121,6 +2121,12 @@ class OwnerSelectionApp:
         """
         if self.stop_event.is_set() and not allow_when_stopped:
             return None
+        if include_energy and self.game_screen_context != "outside_event":
+            self.log(
+                f"Скан энергии пропущен: контекст экрана {self.game_screen_context!r}; "
+                "энергия читается только в меню события с кнопкой «Начать»."
+            )
+            include_energy = False
         if not include_energy and not include_income:
             self.last_scan_error = "не выбран счётчик для сканирования"
             return None
