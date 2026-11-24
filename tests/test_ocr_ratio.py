@@ -4,7 +4,24 @@ import unittest
 
 from PIL import Image, ImageDraw
 
-from hht_ocr import parse_ratio_text, select_ratio_candidate, visual_change_ratio
+from hht_ocr import confirm_income_pair, parse_ratio_text, select_ratio_candidate, visual_change_ratio
+
+
+class ConfirmIncomePairTests(unittest.TestCase):
+    def test_small_initial_income_increment_is_accepted(self):
+        current, maximum, note = confirm_income_pair(0, 1500, 4, 1500)
+        self.assertEqual((current, maximum), (4, 1500))
+        self.assertIn("небольшое изменение", note)
+
+    def test_small_reverse_ocr_variation_uses_larger_reading(self):
+        current, maximum, _ = confirm_income_pair(4, 1500, 0, 1500)
+        self.assertEqual((current, maximum), (4, 1500))
+
+    def test_large_income_difference_is_rejected(self):
+        self.assertEqual(confirm_income_pair(0, 1500, 40, 1500)[:2], (None, None))
+
+    def test_different_targets_are_rejected(self):
+        self.assertEqual(confirm_income_pair(0, 1500, 4, 1900)[:2], (None, None))
 
 
 class SelectRatioCandidateTests(unittest.TestCase):
