@@ -2636,6 +2636,9 @@ class OwnerSelectionApp:
                 energy = energy_scan["energy"]
                 energy_max = energy_scan["energy_max"]
                 energy_ocr_failures = 0
+                # Never reuse the previous cycle's income read as the new
+                # challenge baseline. The new screen must be scanned again.
+                self.last_resume_scan = None
                 self.log(f"Запас энергии перед циклом: {energy}/{energy_max}.")
                 if energy < MINIMUM_ENERGY_PER_CYCLE or energy <= 0:
                     self.log(f"Для следующего цикла нужно не менее {MINIMUM_ENERGY_PER_CYCLE} энергии.")
@@ -2824,6 +2827,8 @@ class OwnerSelectionApp:
                                     attempts=2,
                                 )
                                 if final_scan is None:
+                                    if self.stop_event.is_set():
+                                        break
                                     self.worker_error = (
                                         "ОШИБКА ПОДТВЕРЖДЕНИЯ ДОХОДА",
                                         self.last_scan_error or "Не удалось подтвердить достижение цели",
