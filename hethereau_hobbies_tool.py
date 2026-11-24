@@ -1858,6 +1858,7 @@ class OwnerSelectionApp:
 
         def read_digits(image: Image.Image, method: str, scales, psms):
             values: list[tuple[int, str, str]] = []
+            votes: dict[int, int] = {}
             gray = image.convert("L")
             if gray.getbbox() is None:
                 return values
@@ -1877,7 +1878,7 @@ class OwnerSelectionApp:
                                 "-c tessedit_char_whitelist=0123456789 "
                                 "-c load_system_dawg=0 -c load_freq_dawg=0"
                             ),
-                            timeout=1.8,
+                            timeout=1.2,
                         ).strip()
                     except Exception as exc:
                         diagnostics.append(f"{method}/psm{psm}=ошибка {type(exc).__name__}")
@@ -1887,8 +1888,19 @@ class OwnerSelectionApp:
                         f"{method}/psm{psm}={raw[:36]!r}" if raw
                         else f"{method}/psm{psm}=<пусто>"
                     )
+                    pass_values = set()
                     for token in re.findall(r"\d{1,6}", raw):
-                        values.append((int(token), raw, method))
+                        value = int(token)
+                        values.append((value, raw, method))
+                        pass_values.add(value)
+
+                    # Two matching preprocessing passes are enough for this
+                    # image. The second captured frame independently confirms
+                    # the scan, so the remaining variants stay as fallbacks.
+                    for value in pass_values:
+                        votes[value] = votes.get(value, 0) + 1
+                    if any(count >= 2 for count in votes.values()):
+                        return values
             return values
 
         diagnostics: list[str] = []
