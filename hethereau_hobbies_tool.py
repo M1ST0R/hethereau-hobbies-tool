@@ -1899,8 +1899,21 @@ class OwnerSelectionApp:
                     # the scan, so the remaining variants stay as fallbacks.
                     for value in pass_values:
                         votes[value] = votes.get(value, 0) + 1
-                    if any(count >= 2 for count in votes.values()):
-                        return values
+
+            if votes:
+                best_vote_count = max(votes.values())
+                leaders = [
+                    value for value, count in votes.items()
+                    if count == best_vote_count
+                ]
+                if best_vote_count >= 2:
+                    # Return only the unique consensus value. Competing
+                    # candidates must fall through to another preprocessing
+                    # method rather than being resolved by "largest number".
+                    if len(leaders) != 1:
+                        return []
+                    winner = leaders[0]
+                    return [item for item in values if item[0] == winner]
             return values
 
         diagnostics: list[str] = []
