@@ -19,7 +19,13 @@ import pyautogui
 import pytesseract
 from PIL import Image, ImageOps, ImageGrab, ImageTk, ImageDraw
 import resvg_py
-from hht_ocr import confirm_income_pair, parse_ratio_text, select_ratio_candidate, visual_change_ratio
+from hht_ocr import (
+    confirm_income_pair,
+    parse_ratio_text,
+    select_ratio_candidate,
+    should_enter_precision_mode,
+    visual_change_ratio,
+)
 
 # Use physical pixels for reliable Win32 client-area coordinates.
 try:
@@ -1278,13 +1284,10 @@ class OwnerSelectionApp:
     def stop(self):
         worker = self.worker_thread
         was_running = worker is not None and worker.is_alive()
-        previous_status = self.current_status
-        previous_stage = self.current_stage
-        include_income = (
-            self.game_screen_context == "owner_selection"
-            or "ФАРМ" in previous_status
-            or any(token in previous_stage.lower() for token in ("доход", "фарм", "накоплен"))
-        )
+        # Energy is meaningful only on the event menu ("Начать"). On the
+        # challenge screen this same region displays a different counter.
+        include_energy = self.game_screen_context == "outside_event"
+        include_income = self.game_screen_context == "owner_selection"
 
         self.stop_event.set()
         self.pause_event.clear()
@@ -1297,9 +1300,25 @@ class OwnerSelectionApp:
 
         self.set_status("ОСТАНОВКА", "Прекращаю ввод и после этого сверю счётчики.")
         self.log("Получена команда остановки. Новые клики запрещены.")
-        self._schedule_stop_scan(worker, include_income=include_income)
+        if include_energy or include_income:
+            self._schedule_stop_scan(
+                worker,
+                include_energy=include_energy,
+                include_income=include_income,
+            )
+        else:
+            self.set_status(
+                "ОСТАНОВЛЕНО",
+                "Ввод остановлен на переходном экране; неподходящие счётчики не сканировались.",
+            )
 
-    def _schedule_stop_scan(self, worker: threading.Thread, *, include_income: bool):
+    def _schedule_stop_scan(
+        self,
+        worker: threading.Thread,
+        *,
+        include_energy: bool,
+        include_income: bool,
+    ):
         """Refresh available counters after the worker has stopped sending input."""
         with self._stop_scan_lock:
             if self._stop_scan_pending:
@@ -1321,6 +1340,7 @@ class OwnerSelectionApp:
                     )
                     return
                 result = self._scan_game_state(
+                    include_energy=include_energy,
                     include_income=include_income,
                     reason="после остановки",
                     attempts=2,
@@ -1333,12 +1353,16 @@ class OwnerSelectionApp:
                         "Игровые действия не выполнялись."
                     )
                 else:
-                    summary = (
-                        f"После остановки подтверждены энергия "
-                        f"{result['energy']}/{result['energy_max']}"
-                    )
+                    summary_parts = []
+                    if include_energy:
+                        summary_parts.append(
+                            f"энергия {result['energy']}/{result['energy_max']}"
+                        )
                     if include_income:
-                        summary += f", доход {result['income']}/{result['income_max']}"
+                        summary_parts.append(
+                            f"доход {result['income']}/{result['income_max']}"
+                        )
+                    summary = "После остановки подтверждены " + ", ".join(summary_parts)
                     self.log(summary + ".")
                     self.set_status(
                         "ОСТАНОВЛЕНО",
@@ -1360,9 +1384,20 @@ class OwnerSelectionApp:
             name="HHT-Stop-State-Scan",
         ).start()
 
-    def _perform_pause_scan(self, *, include_income: bool, reason: str):
+    def _perform_pause_scan(
+        self,
+        *,
+        include_energy: bool = False,
+        include_income: bool,
+        reason: str,
+    ):
         """Scan the visible counters while keeping game input paused."""
         if not self.pause_scan_requested.is_set() or self.stop_event.is_set():
+            return None
+        if not include_energy and not include_income:
+            self.pause_scan_requested.clear()
+            self.last_pause_scan = None
+            self.log(f"Скан при паузе пропущен ({reason}): на этом экране нужные счётчики не отображаются.")
             return None
 
         self.pause_scan_requested.clear()
@@ -1372,6 +1407,7 @@ class OwnerSelectionApp:
         )
         try:
             scan = self._scan_game_state(
+                include_energy=include_energy,
                 include_income=include_income,
                 reason=reason,
                 attempts=2,
@@ -1393,12 +1429,12 @@ class OwnerSelectionApp:
                     "Скан не подтверждён. Возобновление потребует повторной проверки.",
                 )
         else:
-            summary = (
-                f"При паузе подтверждены энергия "
-                f"{scan['energy']}/{scan['energy_max']}"
-            )
+            summary_parts = []
+            if include_energy:
+                summary_parts.append(f"энергия {scan['energy']}/{scan['energy_max']}")
             if include_income:
-                summary += f", доход {scan['income']}/{scan['income_max']}"
+                summary_parts.append(f"доход {scan['income']}/{scan['income_max']}")
+            summary = "При паузе подтверждены " + ", ".join(summary_parts)
             self.log(summary + ".")
             if self.pause_event.is_set():
                 self.set_status(
@@ -2043,6 +2079,7 @@ class OwnerSelectionApp:
     def _scan_game_state(
         self,
         *,
+        include_energy: bool = True,
         include_income: bool = True,
         reason: str = "проверка состояния",
         attempts: int = 3,
@@ -2051,6 +2088,7 @@ class OwnerSelectionApp:
         """Serialize scans so manual and worker OCR cannot overlap."""
         with self._state_scan_lock:
             return self._scan_game_state_unlocked(
+                include_energy=include_energy,
                 include_income=include_income,
                 reason=reason,
                 attempts=attempts,
@@ -2060,6 +2098,7 @@ class OwnerSelectionApp:
     def _scan_game_state_unlocked(
         self,
         *,
+        include_energy: bool = True,
         include_income: bool = True,
         reason: str = "проверка состояния",
         attempts: int = 3,
@@ -2073,6 +2112,9 @@ class OwnerSelectionApp:
         block every game action.
         """
         if self.stop_event.is_set() and not allow_when_stopped:
+            return None
+        if not include_energy and not include_income:
+            self.last_scan_error = "не выбран счётчик для сканирования"
             return None
         scan_started = time.perf_counter()
         self._bring_game_to_front()
@@ -2094,7 +2136,7 @@ class OwnerSelectionApp:
             time.sleep(0.12)
             frame_b = self._capture_client_image()
 
-            if confirmed_energy is None:
+            if include_energy and confirmed_energy is None:
                 energy_a, energy_max_a, energy_raw_a = self.read_energy(captured=frame_a)
                 energy_b, energy_max_b, energy_raw_b = self.read_energy(
                     expected_max=energy_max_a or self._known_energy_max,
@@ -2125,31 +2167,36 @@ class OwnerSelectionApp:
                     if income_a != income_b:
                         self.log(f"Доход подтверждён с учётом пассивного прироста: {income_note}")
 
-            energy_ok = confirmed_energy is not None
+            energy_ok = not include_energy or confirmed_energy is not None
             income_ok = not include_income or confirmed_income is not None
 
             if energy_ok and income_ok:
                 scan = {
-                    "energy": confirmed_energy[0],
-                    "energy_max": confirmed_energy[1],
+                    "energy": confirmed_energy[0] if include_energy else None,
+                    "energy_max": confirmed_energy[1] if include_energy else None,
                     "income": confirmed_income[0] if include_income else None,
                     "income_max": confirmed_income[1] if include_income else None,
                     "reason": reason,
                 }
                 self.last_scan_error = ""
+                confirmed_parts = []
+                if include_energy:
+                    confirmed_parts.append(
+                        f"энергия {scan['energy']}/{scan['energy_max']}"
+                    )
+                if include_income:
+                    confirmed_parts.append(
+                        f"доход {scan['income']}/{scan['income_max']}"
+                    )
                 self.log(
                     f"Скан подтверждён ({reason}) за "
-                    f"{(time.perf_counter() - scan_started) * 1000:.0f} мс: энергия "
-                    f"{scan['energy']}/{scan['energy_max']}"
-                    + (
-                        f", доход {scan['income']}/{scan['income_max']}."
-                        if include_income else "."
-                    )
+                    f"{(time.perf_counter() - scan_started) * 1000:.0f} мс: "
+                    + ", ".join(confirmed_parts) + "."
                 )
                 return scan
 
             parts = []
-            if not energy_ok:
+            if include_energy and not energy_ok:
                 parts.append(
                     f"энергия не совпала: {energy_a}/{energy_max_a} → "
                     f"{energy_b}/{energy_max_b} ({energy_raw_a!r}; {energy_raw_b!r})"
@@ -2169,7 +2216,12 @@ class OwnerSelectionApp:
 
         # Preserve the last meaningful failed captures. A stop-triggered scan
         # is skipped when this error is present, so it cannot overwrite them.
-        for counter_name in ("energy", "income"):
+        counters_to_report = []
+        if include_energy:
+            counters_to_report.append("energy")
+        if include_income:
+            counters_to_report.append("income")
+        for counter_name in counters_to_report:
             debug_path = self.last_ocr_debug_paths.get(counter_name)
             if debug_path:
                 self.log(f"Снимок области {counter_name}: {debug_path}")
@@ -2184,9 +2236,20 @@ class OwnerSelectionApp:
             return
         def run_scan():
             try:
-                self.set_status("СКАНИРОВАНИЕ", "Проверяю энергию и доход по двум независимым снимкам")
+                include_energy = self.game_screen_context == "outside_event"
+                include_income = self.game_screen_context == "owner_selection"
+                if not include_energy and not include_income:
+                    self.set_status(
+                        "СКАНИРОВАНИЕ НЕДОСТУПНО",
+                        "Открой меню события с кнопкой «Начать» или экран дохода.",
+                    )
+                    self.log("Ручной OCR пропущен: на текущем переходном экране нет нужных счётчиков.")
+                    return
+                counter_name = "энергию" if include_energy else "доход"
+                self.set_status("СКАНИРОВАНИЕ", f"Проверяю {counter_name} по двум независимым снимкам")
                 result = self._scan_game_state(
-                    include_income=True,
+                    include_energy=include_energy,
+                    include_income=include_income,
                     reason="ручная проверка",
                     allow_when_stopped=True,
                 )
@@ -2196,7 +2259,7 @@ class OwnerSelectionApp:
                         self.last_scan_error or "Счётчики не удалось подтвердить",
                     )
                     return
-                self.set_status("СКАНИРОВАНИЕ ЗАВЕРШЕНО", "Энергия и доход подтверждены")
+                self.set_status("СКАНИРОВАНИЕ ЗАВЕРШЕНО", f"{counter_name.capitalize()} подтверждена")
             except Exception as exc:
                 self.log(f"Ошибка сканирования состояния: {type(exc).__name__}: {exc}")
                 self.set_status("ОШИБКА СКАНИРОВАНИЯ", str(exc))
@@ -2226,26 +2289,32 @@ class OwnerSelectionApp:
                 paused_during_wait = True
                 if self.pause_scan_requested.is_set():
                     self._perform_pause_scan(
-                        include_income=(resume_scan == "both"),
+                        include_energy=(resume_scan == "energy"),
+                        include_income=(resume_scan in ("both", "income")),
                         reason="при паузе во время ожидания",
                     )
                 time.sleep(0.1)
                 continue
 
             if paused_during_wait and self.rescan_requested.is_set():
-                if resume_scan == "both":
-                    # The hammer loop owns a background income OCR thread. Let
-                    # that loop join it and perform the paired scan safely.
+                if resume_scan in ("both", "income"):
+                    # The worker owns the income OCR thread and performs the
+                    # fresh income-only scan after it regains control.
+                    paused_during_wait = False
+                elif resume_scan == "none":
+                    self.rescan_requested.clear()
+                    self.pause_scan_requested.clear()
                     paused_during_wait = False
                 else:
                     self.rescan_requested.clear()
                     self.set_status(
                         "ПОВТОРНЫЙ СКАН",
-                        "После паузы проверяю энергию перед продолжением",
+                        "После паузы проверяю энергию в меню события",
                     )
                     scan = self._scan_game_state(
+                        include_energy=True,
                         include_income=False,
-                        reason="после паузы на экране награды",
+                        reason="после паузы в меню события",
                     )
                     if scan is None:
                         self.worker_error = (
@@ -2309,36 +2378,43 @@ class OwnerSelectionApp:
             return False
 
         if was_paused or self.rescan_requested.is_set():
-            # Hammer clicks are handled by the worker loop, which can first join
-            # its background income OCR thread. Other buttons need an energy
-            # refresh before a single click is allowed.
+            # Hammer clicks are handled by the worker loop. Other actions only
+            # recheck the counter that belongs to the current screen.
             if name == "Молоток":
                 self.rescan_requested.set()
                 return False
 
             self.rescan_requested.clear()
-            scan = self._scan_game_state(
-                include_income=False,
-                reason=f"перед кликом «{name}» после паузы",
-            )
+            include_energy = self.game_screen_context == "outside_event"
+            include_income = self.game_screen_context == "owner_selection"
             self.pause_scan_requested.clear()
-            if scan is None:
-                self.worker_error = (
-                    "ОШИБКА СИНХРОНИЗАЦИИ",
-                    self.last_scan_error or "Не удалось подтвердить энергию перед кликом",
+            if include_energy or include_income:
+                scan = self._scan_game_state(
+                    include_energy=include_energy,
+                    include_income=include_income,
+                    reason=f"перед кликом «{name}» после паузы",
                 )
-                self.set_status(*self.worker_error)
-                self.stop_event.set()
-                return False
+                if scan is None:
+                    self.worker_error = (
+                        "ОШИБКА СИНХРОНИЗАЦИИ",
+                        self.last_scan_error or "Не удалось подтвердить счётчик перед кликом",
+                    )
+                    self.set_status(*self.worker_error)
+                    self.stop_event.set()
+                    return False
 
-            if name == "Магазин" and scan["energy"] < MINIMUM_ENERGY_PER_CYCLE:
-                self.worker_error = (
-                    "ЭНЕРГИЯ ЗАКОНЧИЛАСЬ",
-                    f"Осталось {scan['energy']}. Магазин не открываю.",
-                )
-                self.set_status(*self.worker_error)
-                self.stop_event.set()
-                return False
+                if (
+                    name == "Магазин"
+                    and include_energy
+                    and scan["energy"] < MINIMUM_ENERGY_PER_CYCLE
+                ):
+                    self.worker_error = (
+                        "ЭНЕРГИЯ ЗАКОНЧИЛАСЬ",
+                        f"Осталось {scan['energy']}. Кнопку «Начать» не нажимаю.",
+                    )
+                    self.set_status(*self.worker_error)
+                    self.stop_event.set()
+                    return False
 
         # Re-acquire the game focus immediately before sending the click. The
         # OCR scan may take several seconds and focus can change meanwhile.
@@ -2513,8 +2589,9 @@ class OwnerSelectionApp:
                     while self.pause_event.is_set() and not self.stop_event.is_set():
                         if self.pause_scan_requested.is_set():
                             self._perform_pause_scan(
+                                include_energy=True,
                                 include_income=False,
-                                reason="при паузе перед новым циклом",
+                                reason="при паузе в меню события",
                             )
                         time.sleep(0.1)
                     continue
@@ -2562,28 +2639,30 @@ class OwnerSelectionApp:
                     if self.worker_error is not None or self.stop_event.is_set():
                         break
                 self.game_screen_context = "owner_selection"
-                if not self._wait(SHOP_SETTLE_SECONDS, resume_scan="both"):
+                if not self._wait(SHOP_SETTLE_SECONDS, resume_scan="income"):
                     break
 
                 # Save a fresh target overlay before OCR can abort this cycle.
                 self._save_hammer_target_debug()
 
                 self.set_status(
-                    "СИНХРОНИЗАЦИЯ СЧЁТЧИКОВ",
-                    "Перед молотком проверяю энергию и целевой доход двумя снимками",
+                    "СИНХРОНИЗАЦИЯ ДОХОДА",
+                    "Перед молотком подтверждаю целевой доход двумя снимками",
                 )
                 opening_scan = self.last_resume_scan
                 self.last_resume_scan = None
                 if opening_scan is None or opening_scan.get("income") is None:
                     opening_scan = self._scan_game_state(
-                        include_income=True, reason="после открытия магазина"
+                        include_energy=False,
+                        include_income=True,
+                        reason="после открытия магазина",
                     )
                 self.rescan_requested.clear()
                 self.pause_scan_requested.clear()
                 if opening_scan is None:
                     self.worker_error = (
                         "ОШИБКА СИНХРОНИЗАЦИИ",
-                        self.last_scan_error or "Не удалось подтвердить доход и энергию",
+                        self.last_scan_error or "Не удалось подтвердить доход",
                     )
                     self.set_status(*self.worker_error)
                     self.log("Молоток не нажимаю: начальные значения не подтверждены.")
@@ -2595,15 +2674,16 @@ class OwnerSelectionApp:
                 current_at_open = opening_scan["income"]
                 self.set_metric("income", f"{current_at_open:,} / {active_income_target:,}")
                 self.log(
-                    f"Начальные показатели подтверждены: энергия "
-                    f"{opening_scan['energy']}/{opening_scan['energy_max']}, "
-                    f"доход {current_at_open}/{active_income_target}."
+                    f"Начальный доход подтверждён: "
+                    f"{current_at_open}/{active_income_target}. Энергия уже проверена в меню события."
                 )
                 last_ocr = time.monotonic()
                 last_seen = time.monotonic()
                 last_income_value = current_at_open
                 reached = current_at_open >= active_income_target
-                reached_confirmations = 2 if reached else 0
+                precision_mode = should_enter_precision_mode(
+                    current_at_open, active_income_target
+                )
                 if reached:
                     self.log("Целевой доход уже достигнут. Дополнительные клики не нужны.")
                 self.set_status("ФАРМ ДОХОДА", f"Набираю доход до {active_income_target}")
@@ -2621,16 +2701,17 @@ class OwnerSelectionApp:
                     finally:
                         output["elapsed_ms"] = (time.perf_counter() - started) * 1000
 
-                while not self.stop_event.is_set():
+                while not self.stop_event.is_set() and not reached:
                     while self.pause_event.is_set() and not self.stop_event.is_set():
-                        self.set_status("ПАУЗА", "Фарм приостановлен. Сверяю текущие показатели.")
+                        self.set_status("ПАУЗА", "Фарм приостановлен. Сверяю только доход.")
                         if self.pause_scan_requested.is_set():
                             if income_thread is not None and income_thread.is_alive():
                                 while income_thread.is_alive() and not self.stop_event.is_set():
                                     income_thread.join(timeout=0.1)
-                            if not income_thread.is_alive():
+                            if income_thread is not None and not income_thread.is_alive():
                                 self.active_income_ocr_thread = None
                             self._perform_pause_scan(
+                                include_energy=False,
                                 include_income=True,
                                 reason="при паузе во время фарма",
                             )
@@ -2639,8 +2720,8 @@ class OwnerSelectionApp:
                         break
 
                     if self.rescan_requested.is_set():
-                        # Wait for any previous background OCR to finish before
-                        # taking a fresh pair of screenshots after resume.
+                        # Wait for the previous OCR worker before taking a fresh
+                        # income-only pair after resume.
                         if income_thread is not None and income_thread.is_alive():
                             while income_thread.is_alive() and not self.stop_event.is_set():
                                 income_thread.join(timeout=0.1)
@@ -2654,66 +2735,43 @@ class OwnerSelectionApp:
                         self.pause_scan_requested.clear()
                         self.last_resume_scan = None
                         self.set_status(
-                            "ПОВТОРНЫЙ СКАН",
-                            "После паузы проверяю доход и энергию до продолжения",
+                            "ПОВТОРНЫЙ СКАН ДОХОДА",
+                            "После паузы подтверждаю доход. Энергию на игровом экране не читаю.",
                         )
                         resume_scan_result = self._scan_game_state(
-                            include_income=True, reason="после паузы во время фарма"
+                            include_energy=False,
+                            include_income=True,
+                            reason="после паузы во время фарма",
                         )
                         if resume_scan_result is None:
                             self.worker_error = (
                                 "ОШИБКА СИНХРОНИЗАЦИИ",
-                                self.last_scan_error or "Не удалось повторно прочитать счётчики",
+                                self.last_scan_error or "Не удалось повторно прочитать доход",
                             )
                             self.set_status(*self.worker_error)
                             self.stop_event.set()
                             return
                         self.last_resume_scan = resume_scan_result
                         active_income_target = resume_scan_result["income_max"]
+                        last_income_value = resume_scan_result["income"]
                         last_seen = time.monotonic()
                         last_ocr = last_seen
-                        if resume_scan_result["income"] >= active_income_target:
+                        precision_mode = should_enter_precision_mode(
+                            last_income_value, active_income_target
+                        )
+                        if last_income_value >= active_income_target:
                             reached = True
                             self.log(
-                                f"После паузы цель уже достигнута: "
-                                f"{resume_scan_result['income']}/{active_income_target}."
+                                f"После паузы подтверждена цель: "
+                                f"{last_income_value}/{active_income_target}."
                             )
                             break
 
                     if self.stop_event.is_set():
                         break
 
-                    # Keep the hammer loop independent from Tesseract. OCR works
-                    # on its own captured frame while clicks continue at a steady rate.
-                    clicked = self._click("Молоток")
-                    if not clicked:
-                        if self.stop_event.is_set():
-                            break
-                        if self.rescan_requested.is_set():
-                            continue
-                        break
-                    now = time.monotonic()
-
-                    near_target = (
-                        active_income_target - last_income_value
-                        <= max(75, round(active_income_target * 0.07))
-                    )
-                    next_ocr_interval = 0.25 if near_target else OCR_INTERVAL
-                    if (
-                        income_thread is None
-                        and now - last_ocr >= next_ocr_interval
-                    ):
-                        income_result = {}
-                        income_thread = threading.Thread(
-                            target=read_income_background,
-                            args=(active_income_target, income_result),
-                            daemon=True,
-                            name="HHT-Income-OCR",
-                        )
-                        income_thread.start()
-                        self.active_income_ocr_thread = income_thread
-                        last_ocr = now
-
+                    # Consume finished OCR BEFORE sending the next hammer input.
+                    # This prevents a queued click after the goal is detected.
                     if (
                         income_thread is not None
                         and not income_thread.is_alive()
@@ -2742,40 +2800,106 @@ class OwnerSelectionApp:
                                 self.log(f"Определён целевой доход текущего уровня: {maximum}.")
                             self.set_stage(f"Накопление целевого дохода: {maximum}")
 
-                            if current >= maximum:
-                                reached_confirmations += 1
-                                if reached_confirmations >= 2:
+                            if current >= active_income_target:
+                                self.log(
+                                    f"Порог распознан: {current}/{active_income_target}. "
+                                    "Молоток остановлен; подтверждаю цель двумя свежими кадрами."
+                                )
+                                self.set_status(
+                                    "ПОДТВЕРЖДЕНИЕ ЦЕЛИ",
+                                    f"Проверяю {current}/{active_income_target} без дополнительных ударов",
+                                )
+                                final_scan = self._scan_game_state(
+                                    include_energy=False,
+                                    include_income=True,
+                                    reason="финальное подтверждение целевого дохода",
+                                    attempts=2,
+                                )
+                                if final_scan is None:
+                                    self.worker_error = (
+                                        "ОШИБКА ПОДТВЕРЖДЕНИЯ ДОХОДА",
+                                        self.last_scan_error or "Не удалось подтвердить достижение цели",
+                                    )
+                                    self.set_status(*self.worker_error)
+                                    self.stop_event.set()
+                                    return
+
+                                active_income_target = final_scan["income_max"]
+                                last_income_value = final_scan["income"]
+                                last_seen = time.monotonic()
+                                last_ocr = last_seen
+                                if last_income_value >= active_income_target:
                                     reached = True
                                     self.log(
-                                        f"Целевой показатель подтверждён повторно: "
-                                        f"{current}/{maximum}."
+                                        f"Целевой доход подтверждён без дополнительных ударов: "
+                                        f"{last_income_value}/{active_income_target}."
                                     )
                                     break
+
+                                precision_mode = True
                                 self.log(
-                                    f"Порог {current}/{maximum} распознан. "
-                                    "Проверяю повторно, чтобы исключить кадр анимации."
+                                    f"Финальная проверка показала {last_income_value}/"
+                                    f"{active_income_target}; продолжаю по одному удару с OCR после каждого."
                                 )
                             else:
-                                reached_confirmations = 0
+                                precision_mode = precision_mode or should_enter_precision_mode(
+                                    current, active_income_target
+                                )
                         elif now - last_seen > 15:
-                            self.log(f"Распознавание дохода не работает более 15 секунд. Последний результат: {raw!r}.")
-                            self.set_status("ОШИБКА РАСПОЗНАВАНИЯ", "Значение дохода не читается. Проверь debug_income_capture.png.")
+                            self.log(
+                                f"Распознавание дохода не работает более 15 секунд. "
+                                f"Последний результат: {raw!r}."
+                            )
+                            self.set_status(
+                                "ОШИБКА РАСПОЗНАВАНИЯ",
+                                "Значение дохода не читается. Проверь debug_income_capture.png.",
+                            )
                             return
 
-                    if not self._wait(CLICK_INTERVAL, resume_scan="both"):
+                    if reached or self.stop_event.is_set():
                         break
-                    resume_scan_result = self.last_resume_scan
-                    self.last_resume_scan = None
-                    if (
-                        resume_scan_result is not None
-                        and resume_scan_result.get("income") is not None
-                        and resume_scan_result["income"] >= resume_scan_result["income_max"]
-                    ):
-                        reached = True
-                        self.log(
-                            f"После возобновления подтверждена цель: "
-                            f"{resume_scan_result['income']}/{resume_scan_result['income_max']}."
+
+                    # Near the target, don't click while OCR is running. Each
+                    # completed read permits exactly one new hammer press.
+                    if precision_mode and income_thread is not None:
+                        time.sleep(0.05)
+                        continue
+
+                    clicked = self._click("Молоток")
+                    if not clicked:
+                        if self.stop_event.is_set():
+                            break
+                        if self.rescan_requested.is_set():
+                            continue
+                        break
+                    now = time.monotonic()
+
+                    if precision_mode:
+                        income_result = {}
+                        income_thread = threading.Thread(
+                            target=read_income_background,
+                            args=(active_income_target, income_result),
+                            daemon=True,
+                            name="HHT-Income-OCR-Precision",
                         )
+                        income_thread.start()
+                        self.active_income_ocr_thread = income_thread
+                        last_ocr = now
+                        continue
+
+                    if income_thread is None and now - last_ocr >= OCR_INTERVAL:
+                        income_result = {}
+                        income_thread = threading.Thread(
+                            target=read_income_background,
+                            args=(active_income_target, income_result),
+                            daemon=True,
+                            name="HHT-Income-OCR",
+                        )
+                        income_thread.start()
+                        self.active_income_ocr_thread = income_thread
+                        last_ocr = now
+
+                    if not self._wait(CLICK_INTERVAL, resume_scan="income"):
                         break
 
                 if self.stop_event.is_set() or not reached:
@@ -2787,7 +2911,7 @@ class OwnerSelectionApp:
                 self.ignore_hotkey_until = time.monotonic() + 0.8
                 pyautogui.press("esc")
                 self.game_screen_context = "reward_screen"
-                if not self._wait(2.0, resume_scan="energy"):
+                if not self._wait(2.0, resume_scan="none"):
                     break
 
                 self.set_status("ПОЛУЧАЮ НАГРАДУ", "Забираю награду за испытание")
@@ -2795,7 +2919,7 @@ class OwnerSelectionApp:
                     if self.worker_error is not None:
                         return
                     break
-                if not self._wait(3.0, resume_scan="energy"):
+                if not self._wait(3.0, resume_scan="none"):
                     break
 
                 self.game_screen_context = "outside_event"

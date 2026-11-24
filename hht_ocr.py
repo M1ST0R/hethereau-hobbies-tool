@@ -83,6 +83,26 @@ def confirm_income_pair(
     return selected, maximum_a, f"{selected}/{maximum_a}; два снимка совпали"
 
 
+def should_enter_precision_mode(
+    current: int | None,
+    target: int | None,
+    *,
+    window_ratio: float = 0.30,
+) -> bool:
+    """Switch to one-hit/one-scan mode before the target can be overshot.
+
+    The final 30% is deliberately slower: while OCR is running, no repeated
+    hammer inputs are sent. This trades a little finishing speed for reliable
+    target detection and prevents queued clicks from carrying the counter far
+    beyond its limit.
+    """
+    if current is None or target is None or target <= 0:
+        return False
+    if not 0.0 <= window_ratio <= 1.0:
+        raise ValueError("window_ratio must be between 0 and 1")
+    return current >= target * (1.0 - window_ratio)
+
+
 def select_ratio_candidate(
     parsed: list[tuple[int, int, str]],
 ) -> tuple[int | None, int | None, str]:

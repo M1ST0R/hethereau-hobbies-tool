@@ -4,7 +4,13 @@ import unittest
 
 from PIL import Image, ImageDraw
 
-from hht_ocr import confirm_income_pair, parse_ratio_text, select_ratio_candidate, visual_change_ratio
+from hht_ocr import (
+    confirm_income_pair,
+    parse_ratio_text,
+    select_ratio_candidate,
+    should_enter_precision_mode,
+    visual_change_ratio,
+)
 
 
 class ConfirmIncomePairTests(unittest.TestCase):
@@ -22,6 +28,23 @@ class ConfirmIncomePairTests(unittest.TestCase):
 
     def test_different_targets_are_rejected(self):
         self.assertEqual(confirm_income_pair(0, 1500, 4, 1900)[:2], (None, None))
+
+
+class PrecisionIncomeModeTests(unittest.TestCase):
+    def test_precision_mode_starts_in_final_thirty_percent(self):
+        self.assertFalse(should_enter_precision_mode(1049, 1500))
+        self.assertTrue(should_enter_precision_mode(1050, 1500))
+        self.assertTrue(should_enter_precision_mode(1329, 1900))
+        self.assertFalse(should_enter_precision_mode(1328, 1900))
+
+    def test_precision_mode_handles_missing_or_invalid_values(self):
+        self.assertFalse(should_enter_precision_mode(None, 1500))
+        self.assertFalse(should_enter_precision_mode(1400, None))
+        self.assertFalse(should_enter_precision_mode(0, 0))
+
+    def test_precision_mode_rejects_invalid_window(self):
+        with self.assertRaises(ValueError):
+            should_enter_precision_mode(100, 1500, window_ratio=1.5)
 
 
 class SelectRatioCandidateTests(unittest.TestCase):
