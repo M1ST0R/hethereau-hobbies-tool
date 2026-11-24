@@ -160,7 +160,7 @@ Use **Scan income and energy** in **Settings → Game window and diagnostics**. 
 - `debug_energy_capture.png` — original energy area; `debug_energy_gray.png` and `debug_energy_threshold.png` — processed variants.
 - `debug_income_current_mask.png`, `debug_income_current_relaxed.png`, `debug_income_current_fallback.png` — current-income OCR diagnostics.
 
-`debug_hammer_target.png` — the active game screen with the expected hammer click point marked in red.
+`debug_hammer_target.png` — the active game screen with the expected hammer click point marked in red; `debug_reward_target.png` — the reward screen with the expected claim-button click point marked in red.
 
 When reporting an OCR or click-position issue, attach the relevant images and copy the recent activity log.
 
