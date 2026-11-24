@@ -159,7 +159,7 @@ chmod +x start.sh
 - `debug_energy_capture.png` — исходная область энергии; `debug_energy_gray.png` и `debug_energy_threshold.png` — обработанные варианты.
 - `debug_income_current_mask.png`, `debug_income_current_relaxed.png`, `debug_income_current_fallback.png` — диагностика распознавания текущего дохода.
 
-`debug_hammer_target.png` — экран игры с отмеченной красным ожидаемой точкой нажатия молотка.
+`debug_hammer_target.png` — экран игры с красной отметкой точки нажатия молотка; `debug_reward_target.png` — экран награды с красной отметкой точки нажатия «Получить».
 
 При ошибке OCR или промахах по молотку приложи нужные диагностические изображения и последние записи журнала.
 
