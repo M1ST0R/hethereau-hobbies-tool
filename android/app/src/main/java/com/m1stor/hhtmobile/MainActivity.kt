@@ -59,9 +59,13 @@ class MainActivity : Activity() {
         text(root,s("MODULES","МОДУЛИ"),11,"#58D6CF",24,true)
         moduleCard(root,s("Owner's Selection","Подборка владельца"),s("Counter OCR · Read-only","OCR счётчиков · только чтение"),s("Available · calibration needed","Доступен · нужна калибровка"))
         text(root,s("CONTROL","УПРАВЛЕНИЕ"),11,"#58D6CF",22,true)
-        root.addView(button(s("START HOBI + SCREEN SCAN","ЗАПУСТИТЬ HOBI И СКАН"),true){startAssistant()},LinearLayout.LayoutParams(-1,dp(54)).apply{topMargin=dp(10)})
-        root.addView(button(s("Stop screen scan","Остановить сканирование"),false){sendCaptureCommand(AppActions.ACTION_STOP_CAPTURE)},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
-        root.addView(button(s("Close floating panel","Завершить плавающее окно"),false){sendBroadcast(Intent(AppActions.ACTION_QUIT_OVERLAY).setPackage(packageName))},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        val assistantEnabled=prefs.getBoolean("assistant_enabled",false)
+        root.addView(button(s(if(assistantEnabled)"DISABLE HOBI ASSISTANT" else "ENABLE HOBI ASSISTANT",if(assistantEnabled)"ВЫКЛЮЧИТЬ HOBI" else "ВКЛЮЧИТЬ HOBI"),true){
+            if(assistantEnabled) stopAssistant() else startAssistant()
+        },LinearLayout.LayoutParams(-1,dp(54)).apply{topMargin=dp(10)})
+        root.addView(button(s("Scan once","Сканировать один раз"),false){sendCaptureCommand(AppActions.ACTION_SCAN_NOW)},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        root.addView(button(s("Stop capture","Остановить захват"),false){sendCaptureCommand(AppActions.ACTION_STOP_CAPTURE);prefs.edit().putBoolean("assistant_enabled",false).apply();renderHome()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        root.addView(button(s("EXIT HHT","ВЫЙТИ ИЗ HHT"),false){exitApp()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("SETTINGS","НАСТРОЙКИ"),11,"#58D6CF",22,true)
         root.addView(button(s("Permissions & setup","Разрешения и настройка"),false){renderSetup()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("Read-only OCR only. Automated game interaction is not implemented.","Только OCR. Автоматическое управление игрой пока не реализовано."),11,"#8E9BAA",14)
@@ -70,7 +74,20 @@ class MainActivity : Activity() {
 
     private fun startAssistant() {
         if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Enable overlay permission first","Сначала разреши отображение поверх приложений"),Toast.LENGTH_LONG).show();renderSetup();return}
+        prefs.edit().putBoolean("assistant_enabled",true).apply()
         startService(Intent(this,OverlayService::class.java));requestCapture()
+    }
+    private fun stopAssistant(){
+        sendCaptureCommand(AppActions.ACTION_STOP_CAPTURE)
+        sendBroadcast(Intent(AppActions.ACTION_QUIT_OVERLAY).setPackage(packageName))
+        stopService(Intent(this,ScreenCaptureService::class.java))
+        stopService(Intent(this,OverlayService::class.java))
+        prefs.edit().putBoolean("assistant_enabled",false).apply()
+        renderHome()
+    }
+    private fun exitApp(){
+        stopAssistant()
+        finishAndRemoveTask()
     }
     private fun requestCapture(){val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager;startActivityForResult(mgr.createScreenCaptureIntent(),REQUEST_CAPTURE)}
     @Deprecated("MediaProjection result")
