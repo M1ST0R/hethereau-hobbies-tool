@@ -11,6 +11,9 @@
   <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/releases"><img src="https://img.shields.io/github/v/release/M1ST0R/hethereau-hobbies-tool?label=latest%20release&color=ff648d" alt="Latest release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-7c8fff.svg" alt="MIT license"></a>
   <a href="LICENSE-MATERIAL-SYMBOLS.txt"><img src="https://img.shields.io/badge/icons-Material%20Symbols-59cfe0.svg" alt="Material Symbols"></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/zzstar101/awesome-nte"><img src="https://raw.githubusercontent.com/zzstar101/awesome-nte/main/assets/badge-listed.svg" alt="Listed in Awesome NTE"></a>
 </p>
 
@@ -30,10 +33,10 @@
   <a href="#quick-start"><strong>Quick start</strong></a>
 </p>
 
-<p align="center">
-  <a href="README.md"><strong>🇬🇧</strong></a>
-  <a href="README.ru.md"><strong>🇷🇺</strong></a>
-</p>
+<h1 align="center">
+  <a href="README.md">🇬🇧</a>
+  <a href="README.ru.md">🇷🇺</a>
+</h1>
 
 ---
 
