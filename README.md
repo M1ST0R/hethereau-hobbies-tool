@@ -38,8 +38,6 @@
   <a href="README.ru.md">🇷🇺</a>
 </h1>
 
----
-
 > [!NOTE]
 > HHT is an unofficial community project. It is not affiliated with, endorsed by, or supported by the developers of Neverness to Everness.
 
