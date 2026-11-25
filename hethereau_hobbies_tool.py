@@ -664,9 +664,7 @@ class OwnerSelectionApp:
         for source, target in prefixes:
             if text.startswith(source):
                 return target + text[len(source):]
-        return translated
-
-    def _close_auxiliary_windows(self):
+        if re.search(r'[\\u0400-\\u04FF]', translated):\n            return \"Untranslated message\"\n        return translated\n\n    def _close_auxiliary_windows(self):
         # Logs and About are embedded pages now; there are no Toplevel windows.
         return
 
