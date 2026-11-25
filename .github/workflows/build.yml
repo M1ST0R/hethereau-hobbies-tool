@@ -77,7 +77,25 @@ jobs:
       - name: Install Windows OCR engine
         if: runner.os == 'Windows'
         shell: pwsh
-        run: choco install tesseract --yes --no-progress
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:RUNNER_TEMP "tesseract-ocr-w64-setup.exe"
+          $url = "https://github.com/tesseract-ocr/tesseract/releases/download/5.5.3/tesseract-ocr-w64-setup-5.5.3.20260724.exe"
+          Invoke-WebRequest -Uri $url -OutFile $installer
+          $expectedSha256 = "BEE9E3434BD94FD65387D9BE28CD467A41F61B1275383B55B0F59A1331270AE4"
+          $actualSha256 = (Get-FileHash -Path $installer -Algorithm SHA256).Hash
+          if ($actualSha256 -ne $expectedSha256) {
+            throw "Tesseract installer SHA-256 mismatch: $actualSha256"
+          }
+          $tesseractDir = Join-Path $env:RUNNER_TEMP "Tesseract-OCR"
+          Start-Process -FilePath $installer -ArgumentList "/S", "/D=$tesseractDir" -Wait -NoNewWindow
+          if (!(Test-Path "$tesseractDir\tesseract.exe")) {
+            throw "Tesseract installer finished, but tesseract.exe was not found at $tesseractDir"
+          }
+          if (!(Test-Path "$tesseractDir\tessdata\eng.traineddata")) {
+            throw "English traineddata is missing from the Tesseract install"
+          }
+          "TESSERACT_DIR=$tesseractDir" >> $env:GITHUB_ENV
 
       - name: Install Linux system dependencies
         if: runner.os == 'Linux'
@@ -103,7 +121,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $tesseractDir = "$env:ProgramFiles\Tesseract-OCR"
+          $tesseractDir = "$env:TESSERACT_DIR"
           if (!(Test-Path "$tesseractDir\tesseract.exe")) { throw "Tesseract was not found at $tesseractDir" }
           $iconArgs = @()
           if (Test-Path "assets/app_icon.png") {
