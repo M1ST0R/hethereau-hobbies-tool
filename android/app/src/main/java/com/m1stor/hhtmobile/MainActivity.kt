@@ -26,7 +26,8 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private companion object { const val REQUEST_CAPTURE = 4102; const val REQUEST_NOTIFICATIONS = 4103 }
 
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); lang=prefs.getString("lang","en") ?: "en"; renderSetup() }
+    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); lang=prefs.getString("lang","en") ?: "en"; if(prefs.getBoolean("setup_seen",false)) renderHome() else renderSetup() }
+    override fun onResume() { super.onResume(); if(::root.isInitialized && !isFinishing) { if(prefs.getBoolean("setup_seen",false)) renderHome() else renderSetup() } }
     private fun s(en:String,ru:String)=if(lang=="ru")ru else en
     private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
 
@@ -48,7 +49,10 @@ class MainActivity : Activity() {
         permissionCard(root,s("Screen capture","Захват экрана"),s("Android asks for consent each time a session starts.","Android запрашивает разрешение при каждом запуске захвата."),false,s("Requested on start","Запрашивается при запуске")) { requestCapture() }
         permissionCard(root,s("Accessibility service","Специальные возможности"),s("Not needed for read-only OCR. No game taps are automated.","Для OCR не требуется. Автоматические нажатия пока не реализованы."),true,s("Not required","Не требуется")) {}
         text(root,s("Play Protect may scan sideloaded APKs. Install only builds from this repository and review warnings. Do not disable device protection globally.","Play Protect может проверять APK из сторонних источников. Устанавливай только сборки из репозитория и проверяй предупреждения. Не отключай защиту устройства целиком."),11,"#8E9BAA",18)
-        root.addView(button(s("Continue to HHT","Перейти в HHT"),true){renderHome()},LinearLayout.LayoutParams(-1,dp(52)).apply{topMargin=dp(18)})
+        root.addView(button(s("Continue to HHT","Перейти в HHT"),true){
+            if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Overlay permission is required.","Нужно разрешить отображение поверх приложений."),Toast.LENGTH_LONG).show();return@button}
+            prefs.edit().putBoolean("setup_seen",true).apply();renderHome()
+        },LinearLayout.LayoutParams(-1,dp(52)).apply{topMargin=dp(18)})
         setContentView(ScrollView(this).apply{addView(root)})
     }
 
@@ -65,9 +69,9 @@ class MainActivity : Activity() {
         },LinearLayout.LayoutParams(-1,dp(54)).apply{topMargin=dp(10)})
         root.addView(button(s("Scan once","Сканировать один раз"),false){sendCaptureCommand(AppActions.ACTION_SCAN_NOW)},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         root.addView(button(s("Stop capture","Остановить захват"),false){sendCaptureCommand(AppActions.ACTION_STOP_CAPTURE);prefs.edit().putBoolean("assistant_enabled",false).apply();renderHome()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
-        root.addView(button(s("EXIT HHT","ВЫЙТИ ИЗ HHT"),false){exitApp()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        root.addView(button(s("Exit HHT","Выйти из HHT"),false){exitApp()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("SETTINGS","НАСТРОЙКИ"),11,"#58D6CF",22,true)
-        root.addView(button(s("Permissions & setup","Разрешения и настройка"),false){renderSetup()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        root.addView(button(s("Permissions & setup","Разрешения и настройка"),false){prefs.edit().putBoolean("setup_seen",false).apply();renderSetup()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("Read-only OCR only. Automated game interaction is not implemented.","Только OCR. Автоматическое управление игрой пока не реализовано."),11,"#8E9BAA",14)
         setContentView(ScrollView(this).apply{addView(root)})
     }
@@ -90,7 +94,25 @@ class MainActivity : Activity() {
     }
     private fun requestCapture(){val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager;startActivityForResult(mgr.createScreenCaptureIntent(),REQUEST_CAPTURE)}
     @Deprecated("MediaProjection result")
-    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);if(requestCode==REQUEST_CAPTURE){if(resultCode==RESULT_OK&&data!=null){prefs.edit().putBoolean("assistant_enabled",true).apply();val intent=Intent(this,ScreenCaptureService::class.java).apply{action=AppActions.ACTION_START_CAPTURE;putExtra(AppActions.EXTRA_RESULT_CODE,resultCode);putExtra(AppActions.EXTRA_RESULT_DATA,data)};if(Build.VERSION.SDK_INT>=26)startForegroundService(intent)else startService(intent);Toast.makeText(this,s("Screen scan started","Сканирование запущено"),Toast.LENGTH_SHORT).show();renderHome()}else{prefs.edit().putBoolean("assistant_enabled",false).apply();renderHome()}else Toast.makeText(this,s("Screen capture permission cancelled","Разрешение на захват отменено"),Toast.LENGTH_SHORT).show()}}
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
+        super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode!=REQUEST_CAPTURE) return
+        if(resultCode==RESULT_OK && data!=null){
+            prefs.edit().putBoolean("assistant_enabled",true).apply()
+            val intent=Intent(this,ScreenCaptureService::class.java).apply{
+                action=AppActions.ACTION_START_CAPTURE
+                putExtra(AppActions.EXTRA_RESULT_CODE,resultCode)
+                putExtra(AppActions.EXTRA_RESULT_DATA,data)
+            }
+            if(Build.VERSION.SDK_INT>=26) startForegroundService(intent) else startService(intent)
+            Toast.makeText(this,s("Screen scan started","Сканирование запущено"),Toast.LENGTH_SHORT).show()
+        }else{
+            prefs.edit().putBoolean("assistant_enabled",false).apply()
+            stopService(Intent(this,OverlayService::class.java))
+            Toast.makeText(this,s("Screen capture permission was not granted","Разрешение на захват экрана не предоставлено"),Toast.LENGTH_SHORT).show()
+        }
+        renderHome()
+    }
     private fun permissionCard(parent:LinearLayout,title:String,desc:String,ok:Boolean,actionText:String,action:()->Unit){
         val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(14),dp(13),dp(14),dp(13));background=surface()}
         val row=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL}

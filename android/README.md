@@ -8,7 +8,9 @@ HHT Mobile is a separate Android companion for the Hethereau Hobbies Tool. The f
 
 - Bilingual (English/Russian) onboarding and control screens.
 - Permission setup cards for overlay, battery optimization, notifications, and screen capture.
-- Main module screen with start/stop scan and exit-overlay controls.
+- First-run setup followed by a control center with an explicit Hobi ON/OFF switch.
+- Floating panel with scan, pause/resume, stop, collapse, and explicit quit controls.
+- Dedicated adaptive launcher icon.
 - Dedicated Android launcher icon.
 
 - Draggable floating bubble and compact expanded panel.
@@ -36,7 +38,7 @@ The NTE mobile layout may differ from the desktop layout. The prototype therefor
 - The service registers `MediaProjection.Callback` and releases its virtual display and image reader when capture stops.
 - For cleaner OCR, choose the game app/window in the Android screen-capture prompt when that option is offered. If the user selects the entire display, the overlay may also appear in the captured image.
 
-The current prototype does not request Accessibility access and does not simulate taps. That permission can be considered later, after the OCR regions and game-state logic are validated.
+The current prototype does not request Accessibility access and does not simulate taps. Accessibility access is intentionally marked as not required in the setup screen. That permission can be considered later, after the OCR regions and game-state logic are validated.
 
 ## Build
 
