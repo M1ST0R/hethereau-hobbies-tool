@@ -89,7 +89,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt pyinstaller
-          python -m py_compile hethereau_hobbies_tool.py hht_build_info.py hht_ocr.py hht_hotkeys.py hht_qt_backend.py hht_qt_main.py tests/test_ocr_ratio.py tests/test_hotkeys.py scripts/check_qml.py
+          python -m py_compile hethereau_hobbies_tool.py hht_build_info.py hht_ocr.py hht_hotkeys.py hht_qt_backend.py hht_qt_main.py tests/test_ocr_ratio.py tests/test_hotkeys.py scripts/check_qml.py scripts/render_app_icon.py
           python -m unittest discover -s tests -v
           python scripts/check_material_symbols.py
           python scripts/check_qml.py

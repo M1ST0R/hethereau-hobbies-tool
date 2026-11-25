@@ -160,8 +160,9 @@ ApplicationWindow {
 
                 Image {
                     source: "../assets/app_icon.svg"
-                    sourceSize: Qt.size(96, 96)
+                    sourceSize: Qt.size(48, 48)
                     mipmap: false
+                    smooth: true
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
                 }
@@ -317,7 +318,7 @@ ApplicationWindow {
 
                         color: selected
                             ? (root.darkMode ? "#282448" : "#EFEDFF")
-                            : (hovered && modelData.ready ? panelAlt : "transparent")
+                            : (hovered && modelData.ready ? panelRaised : "transparent")
                         border.width: selected ? 1 : 0
                         border.color: root.darkMode ? "#514A82" : "#D9D4FF"
 
@@ -1640,7 +1641,7 @@ RowLayout {
                                     spacing: 20
 
                                     Image {
-                                        source: "../assets/app_icon.png"
+                                        source: "../assets/app_icon.svg"
                                         sourceSize: Qt.size(448, 448)
                                         mipmap: false
                                         Layout.preferredWidth: 112
