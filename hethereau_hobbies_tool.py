@@ -664,7 +664,7 @@ class OwnerSelectionApp:
         for source, target in prefixes:
             if text.startswith(source):
                 return target + text[len(source):]
-        if re.search(r'[\\u0400-\\u04FF]', translated):
+        if re.search(r'[\u0400-\u04FF]', translated):
             return "Untranslated message"
         return translated
 
