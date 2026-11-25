@@ -61,7 +61,9 @@ class MainActivity : Activity() {
         header(root,s("ASSISTANT","ПОМОЩНИК"))
         text(root,s("Floating controls and OCR status","Плавающее управление и статус OCR"),13,"#9EADBF",6)
         text(root,s("MODULES","МОДУЛИ"),11,"#58D6CF",24,true)
-        moduleCard(root,s("Owner's Selection","Подборка владельца"),s("Counter OCR · Read-only","OCR счётчиков · только чтение"),s("Available · calibration needed","Доступен · нужна калибровка"))
+        val ownerModuleEnabled=prefs.getBoolean("owner_module_enabled",true)
+        moduleCard(root,s("Owner Selection","Подборка владельца"),s("Counter OCR · Read-only","OCR счётчиков · только чтение"),s(if(ownerModuleEnabled)"Module enabled · calibration needed" else "Module disabled",if(ownerModuleEnabled)"Модуль включён · нужна калибровка" else "Модуль выключен"))
+        root.addView(button(s(if(ownerModuleEnabled)"Disable Owner Selection" else "Enable Owner Selection",if(ownerModuleEnabled)"Выключить модуль" else "Включить модуль"),false){prefs.edit().putBoolean("owner_module_enabled",!ownerModuleEnabled).apply();renderHome()},LinearLayout.LayoutParams(-1,dp(42)).apply{topMargin=dp(8)})
         text(root,s("CONTROL","УПРАВЛЕНИЕ"),11,"#58D6CF",22,true)
         val assistantEnabled=prefs.getBoolean("assistant_enabled",false)
         root.addView(button(s(if(assistantEnabled)"DISABLE HOBI ASSISTANT" else "ENABLE HOBI ASSISTANT",if(assistantEnabled)"ВЫКЛЮЧИТЬ HOBI" else "ВКЛЮЧИТЬ HOBI"),true){
@@ -77,6 +79,7 @@ class MainActivity : Activity() {
     }
 
     private fun startAssistant() {
+        if(!prefs.getBoolean("owner_module_enabled",true)){Toast.makeText(this,s("Enable the module first.","Сначала включи модуль."),Toast.LENGTH_SHORT).show();return}
         if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Enable overlay permission first","Сначала разреши отображение поверх приложений"),Toast.LENGTH_LONG).show();renderSetup();return}
         startService(Intent(this,OverlayService::class.java));requestCapture()
     }
