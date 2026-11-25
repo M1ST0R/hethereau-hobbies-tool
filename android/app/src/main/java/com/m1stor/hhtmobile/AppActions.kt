@@ -7,7 +7,7 @@ object AppActions {
     const val ACTION_PAUSE_CAPTURE = "com.m1stor.hhtmobile.PAUSE_CAPTURE"
     const val ACTION_RESUME_CAPTURE = "com.m1stor.hhtmobile.RESUME_CAPTURE"
     const val ACTION_STOP_CAPTURE = "com.m1stor.hhtmobile.STOP_CAPTURE"
-
+    const val ACTION_QUIT_OVERLAY = "com.m1stor.hhtmobile.QUIT_OVERLAY"
     const val EXTRA_RESULT_CODE = "projection_result_code"
     const val EXTRA_RESULT_DATA = "projection_result_data"
     const val EXTRA_OCR_TEXT = "ocr_text"
