@@ -6,6 +6,11 @@ HHT Mobile is a separate Android companion for the Hethereau Hobbies Tool. The f
 
 ## Included in this prototype
 
+- Bilingual (English/Russian) onboarding and control screens.
+- Permission setup cards for overlay, battery optimization, notifications, and screen capture.
+- Main module screen with start/stop scan and exit-overlay controls.
+- Dedicated Android launcher icon.
+
 - Draggable floating bubble and compact expanded panel.
 - Screen capture through Android MediaProjection.
 - ML Kit Text Recognition with the model bundled in the APK, so the recognizer does not need to download its model at first launch.
@@ -20,7 +25,7 @@ HHT Mobile is a separate Android companion for the Hethereau Hobbies Tool. The f
 - Mobile-game counter coordinates and resolution calibration.
 - Level profiles, reward claiming, or the Windows HHT automation engine.
 
-The NTE mobile layout may differ from the desktop layout. The prototype therefore reports generic ratios instead of guessing which number is energy or income. The next implementation step is to collect a few real mobile screenshots, calibrate two small OCR regions, and validate the readings on-device.
+The NTE mobile layout may differ from the desktop layout. The prototype therefore reports generic ratios instead of guessing which number is energy or income. The next implementation step is to collect a few real mobile screenshots, calibrate two small OCR regions, and validate the readings on-device. The scan output currently reports ratio-like text it can find; it does not classify or crop counters into energy/income regions yet.
 
 ## Permissions and Android behavior
 

@@ -128,7 +128,7 @@ class ScreenCaptureService : Service() {
             activeProjection.registerCallback(callback, imageHandler)
             createVirtualDisplay(activeProjection)
         } catch (error: Exception) {
-            publishOcr("Не удалось запустить захват: ${error.javaClass.simpleName}")
+            publishOcr(if (isEnglish()) "Could not start capture: ${error.javaClass.simpleName}" else "Не удалось запустить захват: ${error.javaClass.simpleName}")
             stopCapture()
         }
 
@@ -160,7 +160,7 @@ class ScreenCaptureService : Service() {
             null,
             imageHandler
         )
-        publishOcr("Захват активен · ожидаю кадры…")
+        publishOcr(if (isEnglish()) "Capture active · waiting for frames…" else "Захват активен · ожидаю кадры…")
     }
 
     private fun processLatestFrame(source: ImageReader) {
@@ -186,7 +186,7 @@ class ScreenCaptureService : Service() {
         val bitmap = try {
             imageToBitmap(image)
         } catch (error: Exception) {
-            publishOcr("Ошибка кадра: ${error.javaClass.simpleName}")
+            publishOcr(if (isEnglish()) "Frame error: ${error.javaClass.simpleName}" else "Ошибка кадра: ${error.javaClass.simpleName}")
             null
         } finally {
             image.close()
@@ -199,11 +199,12 @@ class ScreenCaptureService : Service() {
 
         recognizer.process(InputImage.fromBitmap(bitmap, 0))
             .addOnSuccessListener { result ->
-                val readout = CounterOcr.formatReadout(result.text)
+                val english = getSharedPreferences("hht_mobile", MODE_PRIVATE).getString("lang", "en") != "ru"
+                val readout = CounterOcr.formatReadout(result.text, english)
                 publishOcr(readout)
             }
             .addOnFailureListener { error ->
-                publishOcr("Ошибка OCR: ${error.javaClass.simpleName}")
+                publishOcr(if (isEnglish()) "OCR error: ${error.javaClass.simpleName}" else "Ошибка OCR: ${error.javaClass.simpleName}")
             }
             .addOnCompleteListener {
                 bitmap.recycle()
@@ -244,7 +245,7 @@ class ScreenCaptureService : Service() {
         val notification = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_camera)
             .setContentTitle("HHT Mobile")
-            .setContentText("Захват экрана и распознавание счётчиков активно")
+            .setContentText(if (isEnglish()) "Screen capture and counter OCR active" else "Захват экрана и распознавание счётчиков активно")
             .setOngoing(true)
             .build()
 
@@ -262,14 +263,16 @@ class ScreenCaptureService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "HHT screen capture",
+            if (isEnglish()) "HHT screen capture" else "Захват экрана HHT",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Уведомление о захвате экрана для OCR"
+            description = if (isEnglish()) "Screen capture notification for OCR" else "Уведомление о захвате экрана для OCR"
         }
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager)
             .createNotificationChannel(channel)
     }
+
+    private fun isEnglish() = getSharedPreferences("hht_mobile", MODE_PRIVATE).getString("lang", "en") != "ru"
 
     private fun releaseDisplayResources() {
         try { virtualDisplay?.release() } catch (_: Exception) { }

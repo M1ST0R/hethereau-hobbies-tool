@@ -16,10 +16,10 @@ object CounterOcr {
             .distinct()
             .toList()
 
-    fun formatReadout(text: String): String {
+    fun formatReadout(text: String, english: Boolean = false): String {
         val ratios = extractRatios(text)
         return if (ratios.isEmpty()) {
-            "Счётчики не найдены. Текст: ${text.take(90).ifBlank { "—" }}"
+            if (english) "No counters found. Text: ${text.take(90).ifBlank { "—"}}" else "Счётчики не найдены. Текст: ${text.take(90).ifBlank { "—"}}"
         } else {
             ratios.joinToString("  ·  ")
         }

@@ -14,6 +14,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import android.Manifest
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import com.m1stor.hhtmobile.capture.ScreenCaptureService
 import com.m1stor.hhtmobile.overlay.OverlayService
@@ -22,7 +24,7 @@ class MainActivity : Activity() {
     private var lang = "en"
     private val prefs by lazy { getSharedPreferences("hht_mobile", MODE_PRIVATE) }
     private lateinit var root: LinearLayout
-    private companion object { const val REQUEST_CAPTURE = 4102 }
+    private companion object { const val REQUEST_CAPTURE = 4102; const val REQUEST_NOTIFICATIONS = 4103 }
 
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); lang=prefs.getString("lang","en") ?: "en"; renderSetup() }
     private fun s(en:String,ru:String)=if(lang=="ru")ru else en
@@ -39,6 +41,9 @@ class MainActivity : Activity() {
         val batteryOk=if(Build.VERSION.SDK_INT>=23)pm.isIgnoringBatteryOptimizations(packageName) else true
         permissionCard(root,s("Battery restrictions","Оптимизация батареи"),s("Allow unrestricted background operation for more reliable capture.","Разреши работу без ограничений батареи для стабильного захвата."),batteryOk,s("Open settings","Открыть настройки")) {
             if(Build.VERSION.SDK_INT>=23) try { startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,Uri.parse("package:$packageName"))) } catch(_:Exception){startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))}
+        }
+        permissionCard(root,s("Notifications","Уведомления"),s("Show the ongoing capture status. Recommended on Android 13+.","Показывать состояние захвата. Рекомендуется на Android 13+."),Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)==PackageManager.PERMISSION_GRANTED,s("Allow notifications","Разрешить уведомления")) {
+            if(Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
         permissionCard(root,s("Screen capture","Захват экрана"),s("Android asks for consent each time a session starts.","Android запрашивает разрешение при каждом запуске захвата."),false,s("Requested on start","Запрашивается при запуске")) { requestCapture() }
         permissionCard(root,s("Accessibility service","Специальные возможности"),s("Not needed for read-only OCR. No game taps are automated.","Для OCR не требуется. Автоматические нажатия пока не реализованы."),true,s("Not required","Не требуется")) {}
