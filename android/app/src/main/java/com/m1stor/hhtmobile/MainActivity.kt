@@ -74,7 +74,6 @@ class MainActivity : Activity() {
 
     private fun startAssistant() {
         if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Enable overlay permission first","Сначала разреши отображение поверх приложений"),Toast.LENGTH_LONG).show();renderSetup();return}
-        prefs.edit().putBoolean("assistant_enabled",true).apply()
         startService(Intent(this,OverlayService::class.java));requestCapture()
     }
     private fun stopAssistant(){
@@ -91,7 +90,7 @@ class MainActivity : Activity() {
     }
     private fun requestCapture(){val mgr=getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager;startActivityForResult(mgr.createScreenCaptureIntent(),REQUEST_CAPTURE)}
     @Deprecated("MediaProjection result")
-    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);if(requestCode==REQUEST_CAPTURE){if(resultCode==RESULT_OK&&data!=null){val intent=Intent(this,ScreenCaptureService::class.java).apply{action=AppActions.ACTION_START_CAPTURE;putExtra(AppActions.EXTRA_RESULT_CODE,resultCode);putExtra(AppActions.EXTRA_RESULT_DATA,data)};if(Build.VERSION.SDK_INT>=26)startForegroundService(intent)else startService(intent);Toast.makeText(this,s("Screen scan started","Сканирование запущено"),Toast.LENGTH_SHORT).show();renderHome()}else Toast.makeText(this,s("Screen capture permission cancelled","Разрешение на захват отменено"),Toast.LENGTH_SHORT).show()}}
+    override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){super.onActivityResult(requestCode,resultCode,data);if(requestCode==REQUEST_CAPTURE){if(resultCode==RESULT_OK&&data!=null){prefs.edit().putBoolean("assistant_enabled",true).apply();val intent=Intent(this,ScreenCaptureService::class.java).apply{action=AppActions.ACTION_START_CAPTURE;putExtra(AppActions.EXTRA_RESULT_CODE,resultCode);putExtra(AppActions.EXTRA_RESULT_DATA,data)};if(Build.VERSION.SDK_INT>=26)startForegroundService(intent)else startService(intent);Toast.makeText(this,s("Screen scan started","Сканирование запущено"),Toast.LENGTH_SHORT).show();renderHome()}else{prefs.edit().putBoolean("assistant_enabled",false).apply();renderHome()}else Toast.makeText(this,s("Screen capture permission cancelled","Разрешение на захват отменено"),Toast.LENGTH_SHORT).show()}}
     private fun permissionCard(parent:LinearLayout,title:String,desc:String,ok:Boolean,actionText:String,action:()->Unit){
         val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(14),dp(13),dp(14),dp(13));background=surface()}
         val row=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL}
