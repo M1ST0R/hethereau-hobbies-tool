@@ -34,7 +34,7 @@ class MainActivity : Activity() {
     private fun renderSetup() {
         root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(20),dp(18),dp(20),dp(24)); setBackgroundColor(Color.rgb(12,17,26)) }
         header(root,s("SETUP","НАСТРОЙКА"))
-        text(root,s("Prepare Android permissions once. You can revisit this screen anytime.","Настрой разрешения Android. Этот экран можно открыть повторно."),13,"#B8C5D3",8)
+        text(root,s("Set up the permissions HHT needs. You can revisit this page from the dashboard.","Настрой необходимые разрешения. Этот экран можно повторно открыть из меню."),13,"#B8C5D3",8)
         permissionCard(root,s("Display over other apps","Поверх других приложений"),s("Required for the floating Hobi panel.","Нужно для плавающего окна Hobi."),Settings.canDrawOverlays(this),s("Open settings","Открыть настройки")) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))
         }
@@ -47,9 +47,9 @@ class MainActivity : Activity() {
             if(Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
         permissionCard(root,s("Screen capture","Захват экрана"),s("Android asks for consent each time a session starts.","Android запрашивает разрешение при каждом запуске захвата."),false,s("Requested on start","Запрашивается при запуске")) { requestCapture() }
-        permissionCard(root,s("Accessibility service","Специальные возможности"),s("Not needed for read-only OCR. No game taps are automated.","Для OCR не требуется. Автоматические нажатия пока не реализованы."),true,s("Not required","Не требуется")) {}
-        text(root,s("Play Protect may scan sideloaded APKs. Install only builds from this repository and review warnings. Do not disable device protection globally.","Play Protect может проверять APK из сторонних источников. Устанавливай только сборки из репозитория и проверяй предупреждения. Не отключай защиту устройства целиком."),11,"#8E9BAA",18)
-        root.addView(button(s("Continue to HHT","Перейти в HHT"),true){
+        permissionCard(root,s("Accessibility access (optional)","Специальные возможности (необязательно)"),s("Not used by this read-only prototype. No game taps or automation are performed.","Для OCR не требуется. Автоматические нажатия пока не реализованы."),true,s("Not required","Не требуется")) {}
+        text(root,s("Android may verify sideloaded APKs. Review the system warning and install only a build you trust; keep Play Protect enabled.","Android может проверять APK из сторонних источников. Проверяй предупреждения и устанавливай только доверенную сборку; Play Protect отключать не нужно."),11,"#8E9BAA",18)
+        root.addView(button(s("Open dashboard","Открыть меню"),true){
             if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Overlay permission is required.","Нужно разрешить отображение поверх приложений."),Toast.LENGTH_LONG).show();return@button}
             prefs.edit().putBoolean("setup_seen",true).apply();renderHome()
         },LinearLayout.LayoutParams(-1,dp(52)).apply{topMargin=dp(18)})

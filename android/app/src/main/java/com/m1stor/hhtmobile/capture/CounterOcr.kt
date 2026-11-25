@@ -21,7 +21,7 @@ object CounterOcr {
         return if (ratios.isEmpty()) {
             if (english) "No counters found. Text: ${text.take(90).ifBlank { "—"}}" else "Счётчики не найдены. Текст: ${text.take(90).ifBlank { "—"}}"
         } else {
-            ratios.joinToString("  ·  ")
+            ratios.joinToString("\\n")
         }
     }
 }
