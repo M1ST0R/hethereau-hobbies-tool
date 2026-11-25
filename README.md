@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/app_icon.png" alt="HHT app mascot" width="112">
+  <img src="assets/app_icon.svg" alt="HHT app mascot" width="112">
 </p>
 
 <p align="center">
@@ -219,9 +219,9 @@ Leave **Release version** empty to create a DEV build only. No Git tag or Releas
 
 ## App icon
 
-The launcher icon is intentionally kept separate from the interface symbols. The application loads `assets/app_icon.png` when present; the build workflow generates a multi-size Windows `.ico` and includes the PNG in the Linux package.
+The launcher artwork is maintained as `assets/app_icon.svg`. The build workflow renders it to PNG for Linux packaging and generates a multi-size Windows `.ico` from the same vector source.
 
-**Icon artwork location:** `assets/app_icon.png` (square PNG, recommended 1024×1024 with transparent background).
+**Icon artwork location:** `assets/app_icon.svg` (vector source; rendered by the build workflow).
 
 ## Credits
 

@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="assets/app_icon.png" alt="HHT app mascot" width="112">
+  <img src="assets/app_icon.svg" alt="HHT app mascot" width="112">
 </p>
 <p align="center">
   <a href="https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml"><img src="https://github.com/M1ST0R/hethereau-hobbies-tool/actions/workflows/build.yml/badge.svg" alt="Build packages"></a>
@@ -217,9 +217,9 @@ HHT соберёт Windows- и Linux-пакеты, создаст соответ
 
 ## Иконка приложения
 
-Иконка запуска отделена от интерфейсных символов. Если файл `assets/app_icon.png` присутствует, приложение покажет его в окне, а workflow автоматически создаст многоразмерный Windows `.ico` и добавит PNG в Linux-пакет.
+Иконка приложения хранится в `assets/app_icon.svg`. Workflow преобразует SVG в PNG для Linux и создаёт многоразмерный Windows `.ico` из того же векторного источника.
 
-**Куда положить иконку:** `assets/app_icon.png` (квадратный PNG, рекомендуется 1024×1024 с прозрачным фоном).
+**Исходник иконки:** `assets/app_icon.svg` (векторный файл; преобразуется во время сборки).
 
 ## Благодарности
 
