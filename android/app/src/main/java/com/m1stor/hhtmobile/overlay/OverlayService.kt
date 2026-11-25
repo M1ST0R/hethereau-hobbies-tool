@@ -84,7 +84,7 @@ class OverlayService:Service(){
         }
     }
 
-    private fun btn(text:String,action:()->Unit)=Button(this).apply{text=text;isAllCaps=false;textSize=11f;minHeight=dp(38);minimumHeight=dp(38);setTextColor(Color.WHITE);background=shape(Color.rgb(34,48,64),dp(10));setOnClickListener{action()}}
+    private fun btn(text:String,action:()->Unit)=Button(this).apply{this.text=text;isAllCaps=false;textSize=11f;minHeight=dp(38);minimumHeight=dp(38);setTextColor(Color.WHITE);background=shape(Color.rgb(34,48,64),dp(10));setOnClickListener{action()}}
     private fun weight()=LinearLayout.LayoutParams(0,dp(40),1f).apply{marginEnd=dp(5)}
     private fun label(parent:LinearLayout,text:String,size:Int,color:String,top:Int=0,bold:Boolean=false):TextView=TextView(this).apply{this.text=text;textSize=size.toFloat();setTextColor(Color.parseColor(color));if(bold)typeface=Typeface.DEFAULT_BOLD;parent.addView(this,LinearLayout.LayoutParams(-1,-2).apply{if(top>0)topMargin=dp(top)})}
     private fun shape(color:Int,r:Int)=GradientDrawable().apply{setColor(color);cornerRadius=r.toFloat()}
