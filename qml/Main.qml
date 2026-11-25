@@ -159,7 +159,7 @@ ApplicationWindow {
                 z: 1
 
                 Image {
-                    source: "../assets/app_icon.png"
+                    source: "../assets/app_icon.svg"
                     sourceSize: Qt.size(96, 96)
                     mipmap: false
                     Layout.preferredWidth: 24
@@ -436,7 +436,7 @@ ApplicationWindow {
                         radius: 11
                         property bool selected: root.currentPage === modelData.id
                         property bool hovered: toolMouse.containsMouse
-                        color: selected ? panelAlt : (hovered ? panelAlt : "transparent")
+                        color: selected ? panelAlt : (hovered ? panelRaised : "transparent")
 
                         RowLayout {
                             anchors.fill: parent
@@ -450,7 +450,7 @@ ApplicationWindow {
                                 mipmap: false
                                 Layout.preferredWidth: 18
                                 Layout.preferredHeight: 18
-                                opacity: toolNav.selected ? 1.0 : 0.72
+                                opacity: 0.82
                             }
                             Text {
                                 text: root.tr(toolNav.modelData.ru, toolNav.modelData.en)
@@ -706,7 +706,7 @@ ApplicationWindow {
 
                                 Image {
                                     source: root.iconPath("sports_esports")
-                                    sourceSize: Qt.size(2272, 2272)
+                                    sourceSize: Qt.size(256, 256)
                                     mipmap: false
                                     width: 118
                                     height: 118

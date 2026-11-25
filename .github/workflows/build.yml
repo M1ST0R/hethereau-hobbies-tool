@@ -94,6 +94,11 @@ jobs:
           python scripts/check_material_symbols.py
           python scripts/check_qml.py
 
+      - name: Render app icon from SVG
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python scripts/render_app_icon.py
+
       - name: Build Windows executable
         if: runner.os == 'Windows'
         shell: pwsh
@@ -110,6 +115,11 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           $version = "${{ steps.version.outputs.version }}"
           Copy-Item "dist\HHT.exe" "release\Hethereau-HHT-Windows-x64-$version.exe"
+
+      - name: Render app icon from SVG
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python scripts/render_app_icon.py
 
       - name: Build Linux executable and packages
         if: runner.os == 'Linux'
