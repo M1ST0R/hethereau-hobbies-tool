@@ -60,9 +60,13 @@ class ScreenCaptureService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
                 AppActions.ACTION_SCAN_NOW -> forceNextFrame = true
-                AppActions.ACTION_PAUSE_CAPTURE -> paused = true
+                AppActions.ACTION_PAUSE_CAPTURE -> {
+                    paused = true
+                    getSharedPreferences("hht_mobile", MODE_PRIVATE).edit().putBoolean("capture_paused", true).apply()
+                }
                 AppActions.ACTION_RESUME_CAPTURE -> {
                     paused = false
+                    getSharedPreferences("hht_mobile", MODE_PRIVATE).edit().putBoolean("capture_paused", false).apply()
                     forceNextFrame = true
                 }
                 AppActions.ACTION_STOP_CAPTURE -> stopCapture()
@@ -119,6 +123,7 @@ class ScreenCaptureService : Service() {
             val callback = object : MediaProjection.Callback() {
                 override fun onStop() {
                     projection = null
+                    setCaptureActive(false)
                     releaseDisplayResources()
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf()
@@ -136,6 +141,7 @@ class ScreenCaptureService : Service() {
     }
 
     private fun createVirtualDisplay(activeProjection: MediaProjection) {
+        paused = false
         val metrics = DisplayMetrics()
         @Suppress("DEPRECATION")
         (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(metrics)
@@ -160,6 +166,8 @@ class ScreenCaptureService : Service() {
             null,
             imageHandler
         )
+        getSharedPreferences("hht_mobile", MODE_PRIVATE).edit().putBoolean("capture_paused", false).apply()
+        setCaptureActive(true)
         publishOcr(if (isEnglish()) "Capture active · waiting for frames…" else "Захват активен · ожидаю кадры…")
     }
 
@@ -282,7 +290,16 @@ class ScreenCaptureService : Service() {
         imageReader = null
     }
 
+    private fun setCaptureActive(active: Boolean) {
+        val editor = getSharedPreferences("hht_mobile", MODE_PRIVATE).edit().putBoolean("capture_active", active)
+        if (!active) editor.putBoolean("capture_paused", false)
+        editor.apply()
+        sendBroadcast(Intent(AppActions.ACTION_CAPTURE_STATE).setPackage(packageName))
+    }
+
     private fun stopCapture() {
+        paused = false
+        setCaptureActive(false)
         val currentProjection = projection
         projection = null
         if (currentProjection != null) {

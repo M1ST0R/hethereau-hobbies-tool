@@ -2,15 +2,15 @@
 
 > Experimental branch: `android/mobile-overlay-prototype`. This is a read-only MVP scaffold, not a release APK.
 
-HHT Mobile is a separate Android companion for the Hethereau Hobbies Tool. The first milestone is deliberately limited to a floating Hobi panel, explicit screen-capture consent, and on-device OCR.
+HHT Mobile is a separate Android companion for the Hethereau Hobbies Tool. The first milestone is deliberately limited to a floating HHT panel, explicit screen-capture consent, and on-device OCR.
 
 ## Included in this prototype
 
 - Bilingual (English/Russian) onboarding and control screens.
 - Permission setup cards for overlay, battery optimization, notifications, and screen capture.
-- First-run setup followed by a control center with an explicit Hobi ON/OFF switch and a separate per-module enable/disable control.
-- Floating panel with scan, pause/resume, stop, collapse and explicit **Quit assistant** controls. The `×` button quits; the chevron collapses the panel.
-- Custom adaptive launcher icon (dark navy, teal and coral Hobi mascot).
+- First-run setup followed by a control center with an explicit HHT ON/OFF switch and a separate per-module enable/disable control.
+- Floating panel with Start/Scan, pause/resume, stop, collapse and one **Quit HHT** action. The chevron only collapses the panel. Stop retains the last OCR readout; Start requests fresh Android screen-capture consent.
+- Launcher icon uses the original HHT app artwork from `assets/app_icon.png`.
 
 - Draggable floating bubble and compact expanded panel.
 - Screen capture through Android MediaProjection.
@@ -36,6 +36,8 @@ The NTE mobile layout may differ from the desktop layout. The prototype therefor
 - Screen capture runs in a foreground service with the `mediaProjection` service type.
 - The service registers `MediaProjection.Callback` and releases its virtual display and image reader when capture stops.
 - For cleaner OCR, choose the game app/window in the Android screen-capture prompt when that option is offered. If the user selects the entire display, the overlay may also appear in the captured image.
+
+The Android dashboard and floating panel reserve the status/navigation-bar safe insets. The floating panel is clamped to this area when moved or expanded.
 
 The current prototype does not request Accessibility access and does not simulate taps. Accessibility is marked optional/not used in setup. It can be considered later, after OCR regions and game-state logic are validated. Play Protect or other Android installation verification is controlled by the operating system; HHT does not attempt to bypass it.
 
@@ -69,4 +71,4 @@ The branch includes an Android GitHub Actions workflow that builds this debug AP
 2. Capture screenshots from the actual mobile game and calibrate the income/energy regions.
 3. Measure OCR latency on the target phone and tune the frame interval.
 4. Add an explicit, user-enabled AccessibilityService only if real automation is still needed.
-5. Add profiles, settings, logs, and a proper Hobi visual asset after the capture/OCR loop is reliable.
+5. Add profiles, settings, logs, and a proper HHT visual asset after the capture/OCR loop is reliable.

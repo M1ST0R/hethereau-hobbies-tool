@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
+import android.view.WindowInsets
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -26,7 +27,25 @@ class MainActivity : Activity() {
     private lateinit var root: LinearLayout
     private companion object { const val REQUEST_CAPTURE = 4102; const val REQUEST_NOTIFICATIONS = 4103 }
 
-    override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); lang=prefs.getString("lang","en") ?: "en"; if(prefs.getBoolean("setup_seen",false)) renderHome() else renderSetup() }
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        lang=prefs.getString("lang","en") ?: "en"
+        if(prefs.getBoolean("setup_seen",false)) renderHome() else renderSetup()
+        handleCaptureRequest(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleCaptureRequest(intent)
+    }
+
+    private fun handleCaptureRequest(source: Intent?) {
+        if(source?.action==AppActions.ACTION_REQUEST_CAPTURE) {
+            source.action=null
+            window.decorView.post { requestCapture() }
+        }
+    }
     override fun onResume() { super.onResume(); if(::root.isInitialized && !isFinishing) { if(prefs.getBoolean("setup_seen",false)) renderHome() else renderSetup() } }
     private fun s(en:String,ru:String)=if(lang=="ru")ru else en
     private fun dp(v:Int)=(v*resources.displayMetrics.density).toInt()
@@ -35,7 +54,7 @@ class MainActivity : Activity() {
         root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(20),dp(18),dp(20),dp(24)); setBackgroundColor(Color.rgb(12,17,26)) }
         header(root,s("SETUP","НАСТРОЙКА"))
         text(root,s("Set up the permissions HHT needs. You can revisit this page from the dashboard.","Настрой необходимые разрешения. Этот экран можно повторно открыть из меню."),13,"#B8C5D3",8)
-        permissionCard(root,s("Display over other apps","Поверх других приложений"),s("Required for the floating Hobi panel.","Нужно для плавающего окна Hobi."),Settings.canDrawOverlays(this),s("Open settings","Открыть настройки")) {
+        permissionCard(root,s("Display over other apps","Поверх других приложений"),s("Required for the floating HHT panel.","Нужно для плавающего окна HHT."),Settings.canDrawOverlays(this),s("Open settings","Открыть настройки")) {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:$packageName")))
         }
         val pm=getSystemService(POWER_SERVICE) as PowerManager
@@ -53,7 +72,7 @@ class MainActivity : Activity() {
             if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Overlay permission is required.","Нужно разрешить отображение поверх приложений."),Toast.LENGTH_LONG).show();return@button}
             prefs.edit().putBoolean("setup_seen",true).apply();renderHome()
         },LinearLayout.LayoutParams(-1,dp(52)).apply{topMargin=dp(18)})
-        setContentView(ScrollView(this).apply{addView(root)})
+        setScreenContent()
     }
 
     private fun renderHome() {
@@ -66,16 +85,23 @@ class MainActivity : Activity() {
         root.addView(button(s(if(ownerModuleEnabled)"Disable Owner Selection" else "Enable Owner Selection",if(ownerModuleEnabled)"Выключить модуль" else "Включить модуль"),false){prefs.edit().putBoolean("owner_module_enabled",!ownerModuleEnabled).apply();if(ownerModuleEnabled && prefs.getBoolean("assistant_enabled",false))stopAssistant() else renderHome()},LinearLayout.LayoutParams(-1,dp(42)).apply{topMargin=dp(8)})
         text(root,s("CONTROL","УПРАВЛЕНИЕ"),11,"#58D6CF",22,true)
         val assistantEnabled=prefs.getBoolean("assistant_enabled",false)
-        root.addView(button(s(if(assistantEnabled)"DISABLE HOBI ASSISTANT" else "ENABLE HOBI ASSISTANT",if(assistantEnabled)"ВЫКЛЮЧИТЬ HOBI" else "ВКЛЮЧИТЬ HOBI"),true){
+        root.addView(button(s(if(assistantEnabled)"DISABLE HHT ASSISTANT" else "ENABLE HHT ASSISTANT",if(assistantEnabled)"ВЫКЛЮЧИТЬ HHT" else "ВКЛЮЧИТЬ HHT"),true){
             if(assistantEnabled) stopAssistant() else startAssistant()
         },LinearLayout.LayoutParams(-1,dp(54)).apply{topMargin=dp(10)})
-        root.addView(button(s("Scan once","Сканировать один раз"),false){sendCaptureCommand(AppActions.ACTION_SCAN_NOW)},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
-        root.addView(button(s("Stop capture","Остановить захват"),false){sendCaptureCommand(AppActions.ACTION_STOP_CAPTURE);prefs.edit().putBoolean("assistant_enabled",false).apply();renderHome()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        root.addView(button(s("Scan once","Сканировать один раз"),false){
+            if(prefs.getBoolean("capture_active",false)) sendCaptureCommand(AppActions.ACTION_SCAN_NOW) else startAssistant()
+        },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
+        root.addView(button(s("Stop capture","Остановить захват"),false){
+            sendCaptureCommand(AppActions.ACTION_STOP_CAPTURE)
+            prefs.edit().putBoolean("assistant_enabled",false).putBoolean("capture_active",false).putBoolean("capture_paused",false).apply()
+            sendCaptureCommand(AppActions.ACTION_CAPTURE_STATE)
+            renderHome()
+        },LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         root.addView(button(s("Exit HHT","Выйти из HHT"),false){exitApp()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("SETTINGS","НАСТРОЙКИ"),11,"#58D6CF",22,true)
         root.addView(button(s("Permissions & setup","Разрешения и настройка"),false){prefs.edit().putBoolean("setup_seen",false).apply();renderSetup()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("Read-only OCR only. Automated game interaction is not implemented.","Только OCR. Автоматическое управление игрой пока не реализовано."),11,"#8E9BAA",14)
-        setContentView(ScrollView(this).apply{addView(root)})
+        setScreenContent()
     }
 
     private fun startAssistant() {
@@ -88,7 +114,7 @@ class MainActivity : Activity() {
         sendBroadcast(Intent(AppActions.ACTION_QUIT_OVERLAY).setPackage(packageName))
         stopService(Intent(this,ScreenCaptureService::class.java))
         stopService(Intent(this,OverlayService::class.java))
-        prefs.edit().putBoolean("assistant_enabled",false).apply()
+        prefs.edit().putBoolean("assistant_enabled",false).putBoolean("capture_active",false).putBoolean("capture_paused",false).apply()
         renderHome()
     }
     private fun exitApp(){
@@ -110,12 +136,41 @@ class MainActivity : Activity() {
             if(Build.VERSION.SDK_INT>=26) startForegroundService(intent) else startService(intent)
             Toast.makeText(this,s("Screen scan started","Сканирование запущено"),Toast.LENGTH_SHORT).show()
         }else{
-            prefs.edit().putBoolean("assistant_enabled",false).apply()
-            stopService(Intent(this,OverlayService::class.java))
+            prefs.edit().putBoolean("assistant_enabled",false).putBoolean("capture_active",false).apply()
+            sendCaptureCommand(AppActions.ACTION_CAPTURE_STATE)
             Toast.makeText(this,s("Screen capture permission was not granted","Разрешение на захват экрана не предоставлено"),Toast.LENGTH_SHORT).show()
         }
         renderHome()
     }
+    private fun setScreenContent() {
+        val scroll=ScrollView(this).apply {
+            clipToPadding=false
+            addView(root)
+            setOnApplyWindowInsetsListener { view,insets ->
+                val top:Int
+                val bottom:Int
+                if(Build.VERSION.SDK_INT>=30) {
+                    val safe=insets.getInsets(
+                        WindowInsets.Type.statusBars() or
+                            WindowInsets.Type.navigationBars() or
+                            WindowInsets.Type.displayCutout()
+                    )
+                    top=safe.top
+                    bottom=safe.bottom
+                } else {
+                    @Suppress("DEPRECATION")
+                    top=insets.systemWindowInsetTop
+                    @Suppress("DEPRECATION")
+                    bottom=insets.systemWindowInsetBottom
+                }
+                view.setPadding(0,top,0,bottom)
+                insets
+            }
+        }
+        setContentView(scroll)
+        scroll.requestApplyInsets()
+    }
+
     private fun permissionCard(parent:LinearLayout,title:String,desc:String,ok:Boolean,actionText:String,action:()->Unit){
         val card=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;setPadding(dp(14),dp(13),dp(14),dp(13));background=surface()}
         val row=LinearLayout(this).apply{gravity=Gravity.CENTER_VERTICAL}
