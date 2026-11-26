@@ -49,7 +49,7 @@ def main() -> int:
     ui_font = QFont(ui_font_family)
     ui_font.setStyleStrategy(QFont.PreferAntialias)
     app.setFont(ui_font)
-    icon_path = resource_path("assets/app_icon.svg")
+    icon_path = resource_path("assets/app_icon.png")
     if os.path.isfile(icon_path):
         app.setWindowIcon(QIcon(icon_path))
 

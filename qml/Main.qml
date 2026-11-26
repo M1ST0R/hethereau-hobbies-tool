@@ -31,6 +31,7 @@ ApplicationWindow {
     readonly property color panel: darkMode ? "#121B2C" : "#FFFFFF"
     readonly property color panelRaised: darkMode ? "#18243A" : "#F8FAFF"
     readonly property color panelAlt: darkMode ? "#1B2940" : "#EDF1F8"
+    readonly property color hoverSurface: darkMode ? "#151D2B" : "#F6F7FA"
     readonly property color borderColor: darkMode ? "#263650" : "#DCE3EF"
     readonly property color textColor: darkMode ? "#F1F5FF" : "#1B2740"
     readonly property color mutedColor: darkMode ? "#91A1BC" : "#6D7A92"
@@ -159,9 +160,9 @@ ApplicationWindow {
                 z: 1
 
                 Image {
-                    source: "../assets/app_icon.svg"
+                    source: "../assets/app_icon.png"
                     sourceSize: Qt.size(48, 48)
-                    mipmap: false
+                    mipmap: true
                     smooth: true
                     Layout.preferredWidth: 24
                     Layout.preferredHeight: 24
@@ -211,12 +212,12 @@ ApplicationWindow {
                     onClicked: root.showMinimized()
                     background: Rectangle {
                         radius: 7
-                        color: minimizeWindowButton.hovered ? root.panelAlt : "transparent"
+                        color: minimizeWindowButton.hovered ? root.hoverSurface : "transparent"
                     }
                     contentItem: Image {
                         source: root.iconPath("minimize")
                         sourceSize: Qt.size(72, 72)
-                        mipmap: false
+                        mipmap: true
                         width: 18
                         height: 18
                     }
@@ -234,12 +235,12 @@ ApplicationWindow {
                     }
                     background: Rectangle {
                         radius: 7
-                        color: maximizeWindowButton.hovered ? root.panelAlt : "transparent"
+                        color: maximizeWindowButton.hovered ? root.hoverSurface : "transparent"
                     }
                     contentItem: Image {
                         source: root.iconPath(root.visibility === Window.Maximized ? "filter_none" : "crop_square")
                         sourceSize: Qt.size(72, 72)
-                        mipmap: false
+                        mipmap: true
                         width: 18
                         height: 18
                     }
@@ -252,12 +253,12 @@ ApplicationWindow {
                     onClicked: root.close()
                     background: Rectangle {
                         radius: 7
-                        color: closeWindowButton.hovered ? "#C94C63" : "transparent"
+                        color: closeWindowButton.hovered ? root.hoverSurface : "transparent"
                     }
                     contentItem: Image {
                         source: root.iconPath("close")
                         sourceSize: Qt.size(72, 72)
-                        mipmap: false
+                        mipmap: true
                         width: 18
                         height: 18
                     }
@@ -340,7 +341,7 @@ ApplicationWindow {
                                     anchors.centerIn: parent
                                     source: root.iconPath(moduleNav.modelData.icon)
                                     sourceSize: Qt.size(80, 80)
-                                    mipmap: false
+                                    mipmap: true
                                     width: 20
                                     height: 20
                                 }
@@ -448,7 +449,7 @@ ApplicationWindow {
                                 visible: toolNav.modelData.icon !== ""
                                 source: toolNav.modelData.icon !== "" ? root.iconPath(toolNav.modelData.icon) : ""
                                 sourceSize: Qt.size(72, 72)
-                                mipmap: false
+                                mipmap: true
                                 Layout.preferredWidth: 18
                                 Layout.preferredHeight: 18
                                 opacity: 0.82
@@ -569,8 +570,8 @@ ApplicationWindow {
                     onClicked: backend.setLanguage(backend.language === "ru" ? "en" : "ru")
                     background: Rectangle {
                         radius: 11
-                        color: languageButton.hovered ? panelAlt : panel
-                        border.color: borderColor
+                        color: languageButton.hovered ? root.hoverSurface : "transparent"
+                        border.color: "transparent"
                     }
                     contentItem: Text {
                         text: languageButton.text
@@ -589,13 +590,13 @@ ApplicationWindow {
                     onClicked: backend.setTheme(root.darkMode ? "light" : "dark")
                     background: Rectangle {
                         radius: 11
-                        color: themeButton.hovered ? panelAlt : panel
-                        border.color: borderColor
+                        color: themeButton.hovered ? root.hoverSurface : "transparent"
+                        border.color: "transparent"
                     }
                     contentItem: Image {
                         source: root.iconPath(root.darkMode ? "light_mode" : "dark_mode")
                         sourceSize: Qt.size(80, 80)
-                        mipmap: false
+                        mipmap: true
                         width: 20
                         height: 20
                     }
@@ -708,7 +709,7 @@ ApplicationWindow {
                                 Image {
                                     source: root.iconPath("sports_esports")
                                     sourceSize: Qt.size(256, 256)
-                                    mipmap: false
+                                    mipmap: true
                                     width: 118
                                     height: 118
                                     x: parent.width - 145
@@ -840,7 +841,7 @@ ApplicationWindow {
                                                 Image {
                                                     source: root.iconPath(backend.running && !backend.paused ? "pause" : "play_arrow")
                                                     sourceSize: Qt.size(72, 72)
-                                                    mipmap: false
+                                                    mipmap: true
                                                     width: 18
                                                     height: 18
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -872,7 +873,7 @@ ApplicationWindow {
                                                 Image {
                                                     source: root.iconPath("stop")
                                                     sourceSize: Qt.size(64, 64)
-                                                    mipmap: false
+                                                    mipmap: true
                                                     width: 16
                                                     height: 16
                                                     anchors.verticalCenter: parent.verticalCenter
@@ -999,7 +1000,7 @@ ApplicationWindow {
                                     height: 130
                                     source: root.iconPath("waves")
                                     sourceSize: Qt.size(520, 520)
-                                    mipmap: false
+                                    mipmap: true
                                     fillMode: Image.PreserveAspectFit
                                     smooth: true
                                     opacity: 0.9
@@ -1076,7 +1077,7 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             source: root.iconPath("auto_awesome")
                                             sourceSize: Qt.size(96, 96)
-                                            mipmap: false
+                                            mipmap: true
                                             width: 24
                                             height: 24
                                         }
@@ -1197,7 +1198,7 @@ ApplicationWindow {
                                             anchors.centerIn: parent
                                             source: root.iconPath("settings")
                                             sourceSize: Qt.size(100, 100)
-                                            mipmap: false
+                                            mipmap: true
                                             width: 25
                                             height: 25
                                         }
@@ -1422,7 +1423,7 @@ ApplicationWindow {
                                                 Image {
                                                     source: root.iconPath(modelData.icon)
                                                     sourceSize: Qt.size(80, 80)
-                                                    mipmap: false
+                                                    mipmap: true
                                                     width: 20
                                                     height: 20
                                                 }
@@ -1455,7 +1456,7 @@ RowLayout {
                                                 anchors.centerIn: parent
                                                 source: root.iconPath("desktop_windows")
                                                 sourceSize: Qt.size(76, 76)
-                                                mipmap: false
+                                                mipmap: true
                                                 width: 19
                                                 height: 19
                                             }
@@ -1501,7 +1502,7 @@ RowLayout {
                                             contentItem: Image {
                                                 source: root.iconPath("refresh")
                                                 sourceSize: Qt.size(68, 68)
-                                                mipmap: false
+                                                mipmap: true
                                                 width: 17
                                                 height: 17
                                             }
@@ -1530,7 +1531,7 @@ RowLayout {
                                                 anchors.centerIn: parent
                                                 source: root.iconPath("document_scanner")
                                                 sourceSize: Qt.size(92, 92)
-                                                mipmap: false
+                                                mipmap: true
                                                 width: 23
                                                 height: 23
                                             }
@@ -1641,9 +1642,9 @@ RowLayout {
                                     spacing: 20
 
                                     Image {
-                                        source: "../assets/app_icon.svg"
+                                        source: "../assets/app_icon.png"
                                         sourceSize: Qt.size(448, 448)
-                                        mipmap: false
+                                        mipmap: true
                                         Layout.preferredWidth: 112
                                         Layout.preferredHeight: 112
                                         fillMode: Image.PreserveAspectFit
