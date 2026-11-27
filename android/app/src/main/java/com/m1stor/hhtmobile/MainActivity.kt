@@ -20,6 +20,7 @@ import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import com.m1stor.hhtmobile.capture.ScreenCaptureService
 import com.m1stor.hhtmobile.overlay.OverlayService
+import com.m1stor.hhtmobile.taps.TapAccessibilityService
 
 class MainActivity : Activity() {
     private var lang = "en"
@@ -66,7 +67,19 @@ class MainActivity : Activity() {
             if(Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
         permissionCard(root,s("Screen capture","Захват экрана"),s("Android asks for consent each time a session starts.","Android запрашивает разрешение при каждом запуске захвата."),false,s("Requested on start","Запрашивается при запуске")) { requestCapture() }
-        permissionCard(root,s("Accessibility access (optional)","Специальные возможности (необязательно)"),s("Not used by this read-only prototype. No game taps or automation are performed.","Для OCR не требуется. Автоматические нажатия пока не реализованы."),true,s("Not required","Не требуется")) {}
+        val tapAccessEnabled = TapAccessibilityService.isEnabled(this)
+        permissionCard(
+            root,
+            s("Tap automation access","Доступ для нажатий"),
+            s(
+                "Allows HHT to tap only the points you save. It does not read other apps' screen content.",
+                "Разрешает HHT нажимать только сохранённые тобой точки. Содержимое других приложений не читается."
+            ),
+            tapAccessEnabled,
+            if(tapAccessEnabled) s("Open settings","Открыть настройки") else s("Enable tap control","Включить нажатия")
+        ) {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
         text(root,s("Android may verify sideloaded APKs. Review the system warning and install only a build you trust; keep Play Protect enabled.","Android может проверять APK из сторонних источников. Проверяй предупреждения и устанавливай только доверенную сборку; Play Protect отключать не нужно."),11,"#8E9BAA",18)
         root.addView(button(s("Open dashboard","Открыть меню"),true){
             if(!Settings.canDrawOverlays(this)){Toast.makeText(this,s("Overlay permission is required.","Нужно разрешить отображение поверх приложений."),Toast.LENGTH_LONG).show();return@button}
@@ -100,7 +113,7 @@ class MainActivity : Activity() {
         root.addView(button(s("Exit HHT","Выйти из HHT"),false){exitApp()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
         text(root,s("SETTINGS","НАСТРОЙКИ"),11,"#58D6CF",22,true)
         root.addView(button(s("Permissions & setup","Разрешения и настройка"),false){prefs.edit().putBoolean("setup_seen",false).apply();renderSetup()},LinearLayout.LayoutParams(-1,dp(48)).apply{topMargin=dp(10)})
-        text(root,s("Read-only OCR only. Automated game interaction is not implemented.","Только OCR. Автоматическое управление игрой пока не реализовано."),11,"#8E9BAA",14)
+        text(root,s("Income OCR and manually saved tap points. Tap sequences run once when requested.","OCR дохода и сохранённые вручную точки нажатий. Последовательность выполняется один раз по команде."),11,"#8E9BAA",14)
         setScreenContent()
     }
 

@@ -205,19 +205,46 @@ class ScreenCaptureService : Service() {
             return
         }
 
-        recognizer.process(InputImage.fromBitmap(bitmap, 0))
+        val incomeBitmap = try {
+            cropIncomeRegion(bitmap)
+        } catch (error: Exception) {
+            publishOcr(if (isEnglish()) "Income crop error: ${error.javaClass.simpleName}" else "Ошибка области дохода: ${error.javaClass.simpleName}")
+            null
+        }
+        bitmap.recycle()
+
+        if (incomeBitmap == null) {
+            ocrInFlight.set(false)
+            return
+        }
+
+        recognizer.process(InputImage.fromBitmap(incomeBitmap, 0))
             .addOnSuccessListener { result ->
                 val english = getSharedPreferences("hht_mobile", MODE_PRIVATE).getString("lang", "en") != "ru"
-                val readout = CounterOcr.formatReadout(result.text, english)
-                publishOcr(readout)
+                publishOcr(CounterOcr.formatIncome(result.text, english))
             }
             .addOnFailureListener { error ->
                 publishOcr(if (isEnglish()) "OCR error: ${error.javaClass.simpleName}" else "Ошибка OCR: ${error.javaClass.simpleName}")
             }
             .addOnCompleteListener {
-                bitmap.recycle()
+                incomeBitmap.recycle()
                 ocrInFlight.set(false)
             }
+    }
+
+    private fun cropIncomeRegion(source: Bitmap): Bitmap {
+        // Calibrated against the user's six 2244×1008 screenshots.
+        // The HUD is anchored to the upper-right; normalized bounds support
+        // other resolutions with the same game layout.
+        val left = (source.width * 0.740f).toInt().coerceIn(0, source.width - 1)
+        val top = (source.height * 0.089f).toInt().coerceIn(0, source.height - 1)
+        val right = (source.width * 0.936f).toInt().coerceIn(left + 1, source.width)
+        val bottom = (source.height * 0.174f).toInt().coerceIn(top + 1, source.height)
+
+        val crop = Bitmap.createBitmap(source, left, top, right - left, bottom - top)
+        val enlarged = Bitmap.createScaledBitmap(crop, crop.width * 2, crop.height * 2, true)
+        if (enlarged !== crop) crop.recycle()
+        return enlarged
     }
 
     private fun imageToBitmap(image: Image): Bitmap {

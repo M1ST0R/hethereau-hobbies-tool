@@ -1,45 +1,48 @@
 # HHT Mobile — Android prototype
 
-> Experimental branch: `android/mobile-overlay-prototype`. This is a read-only MVP scaffold, not a release APK.
+> Experimental branch: `android/mobile-overlay-prototype`. The Android companion is a prototype and is not yet a release build.
 
-HHT Mobile is a separate Android companion for the Hethereau Hobbies Tool. The first milestone is deliberately limited to a floating HHT panel, explicit screen-capture consent, and on-device OCR.
+HHT Mobile combines an on-screen HHT control panel, a dedicated income OCR crop, and manually configured tap points for Neverness to Everness.
 
-## Included in this prototype
+## Included
 
 - Bilingual (English/Russian) onboarding and control screens.
-- Permission setup cards for overlay, battery optimization, notifications, and screen capture.
-- First-run setup followed by a control center with an explicit HHT ON/OFF switch and a separate per-module enable/disable control.
-- Floating panel with Start/Scan, pause/resume, stop, collapse and one **Quit HHT** action. The chevron only collapses the panel. Stop retains the last OCR readout; Start requests fresh Android screen-capture consent.
-- Launcher icon uses the original HHT app artwork from `assets/app_icon.png`.
+- Permission setup for overlay display, battery restrictions, notifications, screen capture, and optional tap automation.
+- Floating HHT panel with Start/Scan, Pause/Resume, Stop, point editing, one-shot tap execution, and one Quit HHT action.
+- Adaptive screen capture through Android MediaProjection.
+- On-device ML Kit Text Recognition with the model bundled in the APK.
+- Income OCR uses a dedicated crop around the `Доход` row in the upper-right game HUD. It no longer scans arbitrary number ratios from the entire screen.
+- The income crop is based on the six supplied 2244×1008 screenshots and uses normalized screen coordinates, then enlarges the cropped row before recognition.
+- Saved tap points are added from the floating panel. HHT shows numbered markers and stores normalized coordinates, with a maximum of 20 points.
+- Tap points execute once, in the order they were added. There is a 450 ms pause between taps. The sequence can be stopped from the floating panel.
+- Tap positions are normalized to the screen dimensions. HHT asks for points to be re-added if the screen aspect ratio changes substantially.
+- The point editor intercepts calibration touches: those touches register coordinates and are **not** sent to the game.
 
-- Draggable floating bubble and compact expanded panel.
-- Screen capture through Android MediaProjection.
-- ML Kit Text Recognition with the model bundled in the APK, so the recognizer does not need to download its model at first launch.
-- Extraction of visible `current/maximum` number pairs from OCR text, displayed on separate lines for readability.
-- Pause, resume, request-an-extra-scan, and stop controls.
-- Frame throttling and a single in-flight OCR task. Stale frames are discarded rather than queued.
+## Tap automation and privacy
 
-## Not implemented yet
+Tap execution requires the user to enable **HHT Tap Control** manually in Android Accessibility settings. Android does not allow HHT to enable this access silently.
 
-- Automated game taps or gestures.
-- Separate classification of energy vs. income.
-- Mobile-game counter coordinates and resolution calibration.
-- Level profiles, reward claiming, or the Windows HHT automation engine.
+The service uses Android's `AccessibilityService.dispatchGesture()` API to send taps at saved coordinates. Its service configuration sets `canPerformGestures=true` and `canRetrieveWindowContent=false`: it can perform the gestures requested by the user, but it does not inspect the game's accessibility tree or read other apps' UI text.
 
-The NTE mobile layout may differ from the desktop layout. The prototype therefore reports generic ratios instead of guessing which number is energy or income. The next implementation step is to collect a few real mobile screenshots, calibrate two small OCR regions, and validate the readings on-device. The scan output currently reports ratio-like text it can find; it does not classify or crop counters into energy/income regions yet.
+The point sequence is currently a manual, one-shot action. It does not loop, decide which game action to perform, or automatically react to OCR income. Those behaviours should only be added after the saved coordinates and tap timing are validated in the game.
 
-## Permissions and Android behavior
+## OCR calibration notes
+
+The supplied screenshots show the income row at approximately 74.0–93.6% of screen width and 8.9–17.4% of screen height. The crop is calibrated for that HUD layout. If the game changes its interface, aspect ratio, or HUD placement, the crop may need recalibration.
+
+OCR reads only the cropped row and returns the first valid `current / target` pair. If it cannot find a valid pair, the overlay reports the recognized text from that crop rather than mixing ratios from other parts of the screen.
+
+## Permissions and Android behaviour
 
 - Minimum Android version: Android 8.0 (API 26), required for `TYPE_APPLICATION_OVERLAY`.
-- The user must explicitly allow HHT Mobile to display over other apps.
-- The user must approve each screen-capture session through the Android system prompt. The app does not retain or reuse a MediaProjection token.
+- The user must explicitly allow HHT to display over other apps.
+- The user must approve each screen-capture session through the Android system prompt. HHT does not retain or reuse a MediaProjection token.
 - Screen capture runs in a foreground service with the `mediaProjection` service type.
 - The service registers `MediaProjection.Callback` and releases its virtual display and image reader when capture stops.
-- For cleaner OCR, choose the game app/window in the Android screen-capture prompt when that option is offered. If the user selects the entire display, the overlay may also appear in the captured image.
-
-The Android dashboard and floating panel reserve the status/navigation-bar safe insets. The floating panel is clamped to this area when moved or expanded.
-
-The current prototype does not request Accessibility access and does not simulate taps. Accessibility is marked optional/not used in setup. It can be considered later, after OCR regions and game-state logic are validated. Play Protect or other Android installation verification is controlled by the operating system; HHT does not attempt to bypass it.
+- The user must separately enable HHT Tap Control in Accessibility settings before taps can be sent.
+- The floating HHT panel and point editor reserve the status/navigation-bar safe area where their controls are placed.
+- If the user selects the entire display in the Android capture prompt, the overlay may also appear in the captured image. Select the game app/window when Android offers that option.
+- Play Protect or other Android installation verification is controlled by the operating system; HHT does not attempt to bypass it.
 
 ## Build
 
@@ -64,11 +67,3 @@ app/build/outputs/apk/debug/app-debug.apk
 ```
 
 The branch includes an Android GitHub Actions workflow that builds this debug APK and uploads it as an artifact. This repository snapshot does not yet include a Gradle wrapper.
-
-## Suggested next milestones
-
-1. Validate overlay permissions and projection lifecycle on a physical Android device.
-2. Capture screenshots from the actual mobile game and calibrate the income/energy regions.
-3. Measure OCR latency on the target phone and tune the frame interval.
-4. Add an explicit, user-enabled AccessibilityService only if real automation is still needed.
-5. Add profiles, settings, logs, and a proper HHT visual asset after the capture/OCR loop is reliable.
